@@ -2,45 +2,48 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../lib/db';
 import { enqueueOfflineAction } from '../../lib/syncManager';
-import { 
-  Users, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock, 
-  ShieldAlert, 
-  ChevronRight, 
-  QrCode, 
-  ArrowUpRight,
+import {
+  Users,
+  AlertTriangle,
+  CheckCircle,
+  ShieldAlert,
+  ChevronRight,
+  QrCode,
   Filter,
   Edit,
   X,
   Save
 } from 'lucide-react';
 
+// Title-case triage → priority order for sorting (Red > Yellow > Green)
+const TRIAGE_PRIORITY = { Red: 1, Yellow: 2, Green: 3 };
+
 export function QueueManager({ onSelectQR, onNavigateIntake }) {
   const [filterTriage, setFilterTriage] = useState('ALL');
 
   // Edit Modal state
-  const [editingItem, setEditingItem] = useState(null); // { visit, patient }
+  const [editingItem, setEditingItem] = useState(null); // { queueEntry, patient }
   const [editFullName, setEditFullName] = useState('');
   const [editGender, setEditGender] = useState('Male');
   const [editBloodGroup, setEditBloodGroup] = useState('O+');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [editEmergencyPhone, setEditEmergencyPhone] = useState('');
 
-  const [editTriageStatus, setEditTriageStatus] = useState('GREEN');
+  const [editTriageStatus, setEditTriageStatus] = useState('Green');
   const [editAge, setEditAge] = useState('');
   const [editHeight, setEditHeight] = useState('');
   const [editWeight, setEditWeight] = useState('');
-
   const [editBp, setEditBp] = useState('');
   const [editSpo2, setEditSpo2] = useState('');
   const [editHeartRate, setEditHeartRate] = useState('');
   const [editTemp, setEditTemp] = useState('');
-  const [editAshaInstructions, setEditAshaInstructions] = useState('');
+  const [editSurvivalInfo, setEditSurvivalInfo] = useState('');
 
-  // Fetch all active visits and patients from Dexie IndexedDB
-  const visits = useLiveQuery(() => db.visits.where('status').notEqual('COMPLETED').toArray(), []) || [];
+  // Fetch all active queue entries and patients from Dexie IndexedDB
+  const queueEntries = useLiveQuery(
+    () => db.queue.where('status').notEqual('Completed').toArray(),
+    []
+  ) || [];
   const patients = useLiveQuery(() => db.patients.toArray(), []) || [];
 
   const patientMap = patients.reduce((acc, p) => {
@@ -48,46 +51,44 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
     return acc;
   }, {});
 
-  // Sort strictly according to API_SPEC.md: RED > YELLOW > GREEN, then created_at ASC
-  const triagePriorityOrder = { RED: 1, YELLOW: 2, GREEN: 3 };
-
-  const sortedVisits = [...visits].sort((a, b) => {
-    const pA = triagePriorityOrder[a.triage_status] || 4;
-    const pB = triagePriorityOrder[b.triage_status] || 4;
+  // Sort: Red > Yellow > Green, then FIFO by created_at
+  const sortedEntries = [...queueEntries].sort((a, b) => {
+    const pA = TRIAGE_PRIORITY[a.triage_status] ?? 4;
+    const pB = TRIAGE_PRIORITY[b.triage_status] ?? 4;
     if (pA !== pB) return pA - pB;
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   });
 
-  const filteredVisits = sortedVisits.filter((v) => {
+  const filteredEntries = sortedEntries.filter((q) => {
     if (filterTriage === 'ALL') return true;
-    return v.triage_status === filterTriage;
+    return q.triage_status === filterTriage;
   });
 
-  const countRed = visits.filter((v) => v.triage_status === 'RED' && v.status === 'WAITING').length;
-  const countYellow = visits.filter((v) => v.triage_status === 'YELLOW' && v.status === 'WAITING').length;
-  const countGreen = visits.filter((v) => v.triage_status === 'GREEN' && v.status === 'WAITING').length;
-  const countInConsultation = visits.filter((v) => v.status === 'IN_CONSULTATION').length;
+  const countRed = queueEntries.filter((q) => q.triage_status === 'Red' && q.status === 'Waiting').length;
+  const countYellow = queueEntries.filter((q) => q.triage_status === 'Yellow' && q.status === 'Waiting').length;
+  const countGreen = queueEntries.filter((q) => q.triage_status === 'Green' && q.status === 'Waiting').length;
+  const countInProgress = queueEntries.filter((q) => q.status === 'In Progress').length;
 
-  const handleOpenEditModal = (visit, patient) => {
-    const vitals = visit.vitals_summary ? JSON.parse(visit.vitals_summary) : {};
-    
-    setEditingItem({ visit, patient });
-    setEditFullName(patient.full_name || '');
+  const handleOpenEditModal = (queueEntry, patient) => {
+    const vitals = queueEntry.vitals || {};
+    setEditingItem({ queueEntry, patient });
+    setEditFullName(patient.name || '');
     setEditGender(patient.gender || 'Male');
     setEditBloodGroup(patient.blood_group || 'O+');
-    setEditPhoneNumber(patient.phone_number || '');
+    setEditPhoneNumber(patient.phone || '');
     setEditEmergencyPhone(patient.emergency_phone || '');
 
-    setEditTriageStatus(visit.triage_status || 'GREEN');
-    setEditAge(visit.age_at_visit || '');
-    setEditHeight(visit.height || '');
-    setEditWeight(visit.weight || '');
+    setEditTriageStatus(queueEntry.triage_status || 'Green');
+    setEditAge(queueEntry.age || '');
+    setEditHeight(queueEntry.height || '');
+    setEditWeight(queueEntry.weight || '');
 
+    // Vitals stored as plain object
     setEditBp(vitals.bp || '');
     setEditSpo2(vitals.spo2 ? vitals.spo2.replace('%', '') : '');
     setEditHeartRate(vitals.heartRate ? vitals.heartRate.replace(' bpm', '') : '');
     setEditTemp(vitals.temp ? vitals.temp.replace('°F', '') : '');
-    setEditAshaInstructions(visit.asha_instructions || '');
+    setEditSurvivalInfo(queueEntry.survival_info || '');
   };
 
   const handleSavePatientEdits = async (e) => {
@@ -97,22 +98,22 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
     try {
       const now = new Date().toISOString();
       const patientId = editingItem.patient.id;
-      const visitId = editingItem.visit.id;
+      const queueId = editingItem.queueEntry.id;
 
       // 1. Update Patient record
-      const updatedPatientPayload = {
+      const updatedPatient = {
         id: patientId,
-        full_name: editFullName.trim(),
+        name: editFullName.trim(),
         gender: editGender,
         blood_group: editBloodGroup,
-        phone_number: editPhoneNumber.trim(),
+        phone: editPhoneNumber.trim(),
         emergency_phone: editEmergencyPhone.trim()
       };
 
-      await db.patients.update(patientId, updatedPatientPayload);
-      await enqueueOfflineAction('patients', 'UPDATE', updatedPatientPayload);
+      await db.patients.update(patientId, updatedPatient);
+      await enqueueOfflineAction('patients', 'UPDATE', updatedPatient);
 
-      // 2. Update Visit record
+      // 2. Update Queue entry
       const vitalsObj = {
         bp: editBp || '120/80',
         spo2: editSpo2 ? `${editSpo2}%` : '98%',
@@ -120,19 +121,19 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
         temp: editTemp ? `${editTemp}°F` : '98.6°F'
       };
 
-      const updatedVisitPayload = {
-        id: visitId,
+      const updatedQueue = {
+        id: queueId,
         triage_status: editTriageStatus,
-        age_at_visit: parseInt(editAge) || 30,
-        height: parseFloat(editHeight) || 165,
-        weight: parseFloat(editWeight) || 60,
-        vitals_summary: JSON.stringify(vitalsObj),
-        asha_instructions: editAshaInstructions.trim(),
+        age: parseInt(editAge) || null,
+        height: parseFloat(editHeight) || null,
+        weight: parseFloat(editWeight) || null,
+        vitals: vitalsObj,
+        survival_info: editSurvivalInfo.trim(),
         updated_at: now
       };
 
-      await db.visits.update(visitId, updatedVisitPayload);
-      await enqueueOfflineAction('visits', 'UPDATE', updatedVisitPayload);
+      await db.queue.update(queueId, updatedQueue);
+      await enqueueOfflineAction('queue', 'UPDATE', updatedQueue);
 
       setEditingItem(null);
     } catch (err) {
@@ -141,51 +142,39 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
     }
   };
 
-  const handleElevateTriage = async (visitId, newTriage) => {
+  const handleElevateTriage = async (queueId, newTriage) => {
     try {
       const now = new Date().toISOString();
-      await db.visits.update(visitId, {
-        triage_status: newTriage,
-        updated_at: now
-      });
-      await enqueueOfflineAction('visits', 'UPDATE', {
-        id: visitId,
-        triage_status: newTriage,
-        updated_at: now
-      });
+      const payload = { id: queueId, triage_status: newTriage, updated_at: now };
+      await db.queue.update(queueId, payload);
+      await enqueueOfflineAction('queue', 'UPDATE', payload);
     } catch (err) {
       console.error('Error updating triage status:', err);
     }
   };
 
-  const handleUpdateStatus = async (visitId, newStatus) => {
+  const handleUpdateStatus = async (queueId, newStatus) => {
     try {
       const now = new Date().toISOString();
-      await db.visits.update(visitId, {
-        status: newStatus,
-        updated_at: now
-      });
-      await enqueueOfflineAction('visits', 'UPDATE', {
-        id: visitId,
-        status: newStatus,
-        updated_at: now
-      });
+      const payload = { id: queueId, status: newStatus, updated_at: now };
+      await db.queue.update(queueId, payload);
+      await enqueueOfflineAction('queue', 'UPDATE', payload);
     } catch (err) {
-      console.error('Error updating visit status:', err);
+      console.error('Error updating queue status:', err);
     }
   };
 
   return (
     <div>
-      {/* Metric Statistics Header */}
+      {/* Metric Stats Header */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        
+
         <div className="glass-panel" style={{ padding: '18px', display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(6, 182, 212, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Users size={22} color="#06b6d4" />
           </div>
           <div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f8fafc' }}>{visits.length}</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f8fafc' }}>{queueEntries.length}</div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total Active Patients</div>
           </div>
         </div>
@@ -222,15 +211,13 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
 
       </div>
 
-      {/* Queue Toolbar Controls */}
+      {/* Queue Toolbar */}
       <div className="glass-panel" style={{ padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-        
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Filter size={18} color="#06b6d4" />
           <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Triage:</span>
-          
           <div style={{ display: 'flex', gap: '6px' }}>
-            {['ALL', 'RED', 'YELLOW', 'GREEN'].map((t) => (
+            {['ALL', 'Red', 'Yellow', 'Green'].map((t) => (
               <button
                 key={t}
                 onClick={() => setFilterTriage(t)}
@@ -258,8 +245,8 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
         </button>
       </div>
 
-      {/* Queue Cards List */}
-      {filteredVisits.length === 0 ? (
+      {/* Queue Cards */}
+      {filteredEntries.length === 0 ? (
         <div className="glass-panel" style={{ padding: '40px', textAlign: 'center' }}>
           <Users size={40} color="var(--text-dim)" style={{ marginBottom: '12px' }} />
           <h3 style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>No patients matching this filter in queue.</h3>
@@ -269,41 +256,32 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {filteredVisits.map((visit, index) => {
-            const patient = patientMap[visit.patient_id] || { full_name: 'Unknown Patient', blood_group: 'N/A', phone_number: 'N/A' };
-            const vitals = visit.vitals_summary ? JSON.parse(visit.vitals_summary) : {};
-            const isRed = visit.triage_status === 'RED';
-            const isYellow = visit.triage_status === 'YELLOW';
-            const isConsulting = visit.status === 'IN_CONSULTATION';
+          {filteredEntries.map((qEntry, index) => {
+            const patient = patientMap[qEntry.patient_id] || { name: 'Unknown Patient', blood_group: 'N/A', phone: 'N/A' };
+            const vitals = qEntry.vitals || {};
+            const isRed = qEntry.triage_status === 'Red';
+            const isYellow = qEntry.triage_status === 'Yellow';
+            const isInProgress = qEntry.status === 'In Progress';
 
             return (
               <div
-                key={visit.id}
-                className={`glass-panel ${isRed && visit.status === 'WAITING' ? 'pulse-red' : ''}`}
+                key={qEntry.id}
+                className={`glass-panel ${isRed && qEntry.status === 'Waiting' ? 'pulse-red' : ''}`}
                 style={{
                   padding: '20px',
                   borderLeft: isRed ? '5px solid #ef4444' : isYellow ? '5px solid #f59e0b' : '5px solid #10b981',
-                  background: isConsulting ? 'rgba(6, 182, 212, 0.08)' : 'var(--bg-card)'
+                  background: isInProgress ? 'rgba(6, 182, 212, 0.08)' : 'var(--bg-card)'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-                  
-                  {/* Left Column: Position & Patient Details */}
+
+                  {/* Left: Queue Position & Patient Details */}
                   <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                    
-                    {/* Queue Priority Number */}
                     <div style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '10px',
-                      background: 'rgba(15, 23, 42, 0.8)',
-                      border: '1px solid var(--border-color)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 800,
-                      fontSize: '1.1rem',
-                      color: isRed ? '#fca5a5' : '#f8fafc'
+                      width: '40px', height: '40px', borderRadius: '10px',
+                      background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: 800, fontSize: '1.1rem', color: isRed ? '#fca5a5' : '#f8fafc'
                     }}>
                       #{index + 1}
                     </div>
@@ -311,15 +289,12 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                         <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>
-                          {patient.full_name}
+                          {patient.name}
                         </h3>
-                        
-                        {/* Triage Badge */}
                         <span className={`badge ${isRed ? 'badge-red' : isYellow ? 'badge-yellow' : 'badge-green'}`}>
-                          {visit.triage_status === 'RED' ? '🚨 RED (Emergency)' : visit.triage_status === 'YELLOW' ? '⚠️ YELLOW (Urgent)' : '🟢 GREEN (Standard)'}
+                          {qEntry.triage_status === 'Red' ? '🚨 RED (Emergency)' : qEntry.triage_status === 'Yellow' ? '⚠️ YELLOW (Urgent)' : '🟢 GREEN (Standard)'}
                         </span>
-
-                        {isConsulting && (
+                        {isInProgress && (
                           <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.2)', border: '1px solid #06b6d4', color: '#67e8f9' }}>
                             🩺 IN CONSULTATION WITH DOCTOR
                           </span>
@@ -329,43 +304,40 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
                       <div style={{ display: 'flex', gap: '16px', marginTop: '6px', fontSize: '0.8rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                         <span>Gender: <strong style={{ color: '#e2e8f0' }}>{patient.gender}</strong></span>
                         <span>Blood: <strong style={{ color: '#e2e8f0' }}>{patient.blood_group}</strong></span>
-                        <span>Age: <strong style={{ color: '#e2e8f0' }}>{visit.age_at_visit} yrs</strong></span>
-                        <span>Phone: <strong style={{ color: '#e2e8f0' }}>{patient.phone_number}</strong></span>
-                        <span>Queued: <strong style={{ color: '#e2e8f0' }}>{new Date(visit.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></span>
+                        <span>Age: <strong style={{ color: '#e2e8f0' }}>{qEntry.age} yrs</strong></span>
+                        <span>Phone: <strong style={{ color: '#e2e8f0' }}>{patient.phone}</strong></span>
+                        <span>Queued: <strong style={{ color: '#e2e8f0' }}>{new Date(qEntry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></span>
                       </div>
 
                       {/* Vitals Ribbon */}
                       <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
-                        <div style={{ padding: '4px 10px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '6px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
-                          BP: <strong style={{ color: '#06b6d4' }}>{vitals.bp || '120/80'}</strong>
-                        </div>
-                        <div style={{ padding: '4px 10px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '6px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
-                          SpO2: <strong style={{ color: '#10b981' }}>{vitals.spo2 || '98%'}</strong>
-                        </div>
-                        <div style={{ padding: '4px 10px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '6px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
-                          Pulse: <strong style={{ color: '#f59e0b' }}>{vitals.heartRate || '75 bpm'}</strong>
-                        </div>
-                        <div style={{ padding: '4px 10px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '6px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
-                          Temp: <strong style={{ color: '#e2e8f0' }}>{vitals.temp || '98.6°F'}</strong>
-                        </div>
+                        {[
+                          { label: 'BP', value: vitals.bp || '—', color: '#06b6d4' },
+                          { label: 'SpO2', value: vitals.spo2 || '—', color: '#10b981' },
+                          { label: 'Pulse', value: vitals.heartRate || '—', color: '#f59e0b' },
+                          { label: 'Temp', value: vitals.temp || '—', color: '#e2e8f0' }
+                        ].map(({ label, value, color }) => (
+                          <div key={label} style={{ padding: '4px 10px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '6px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
+                            {label}: <strong style={{ color }}>{value}</strong>
+                          </div>
+                        ))}
                       </div>
 
-                      {/* ASHA Instructions */}
-                      {visit.asha_instructions && (
+                      {/* ASHA Notes */}
+                      {qEntry.survival_info && (
                         <p style={{ marginTop: '10px', fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic', background: 'rgba(0,0,0,0.2)', padding: '6px 12px', borderRadius: '6px' }}>
-                          " {visit.asha_instructions} "
+                          "{qEntry.survival_info}"
                         </p>
                       )}
                     </div>
                   </div>
 
-                  {/* Right Column: Actions */}
+                  {/* Right: Action Controls */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end', minWidth: '180px' }}>
-                    
-                    {/* Status Workflow Controls */}
-                    {visit.status === 'WAITING' ? (
+
+                    {qEntry.status === 'Waiting' ? (
                       <button
-                        onClick={() => handleUpdateStatus(visit.id, 'IN_CONSULTATION')}
+                        onClick={() => handleUpdateStatus(qEntry.id, 'In Progress')}
                         className="btn btn-secondary"
                         style={{ width: '100%', fontSize: '0.8rem', justifyContent: 'space-between' }}
                       >
@@ -374,18 +346,17 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
                       </button>
                     ) : (
                       <button
-                        onClick={() => handleUpdateStatus(visit.id, 'COMPLETED')}
+                        onClick={() => handleUpdateStatus(qEntry.id, 'Completed')}
                         className="btn btn-primary"
                         style={{ width: '100%', fontSize: '0.8rem', justifyContent: 'space-between' }}
                       >
-                        <span>Mark Visit Completed</span>
+                        <span>Mark Completed</span>
                         <CheckCircle size={14} />
                       </button>
                     )}
 
-                    {/* QR Code Quick Action */}
                     <button
-                      onClick={() => onSelectQR(visit.patient_id)}
+                      onClick={() => onSelectQR(qEntry.patient_id)}
                       className="btn btn-secondary"
                       style={{ width: '100%', fontSize: '0.8rem', justifyContent: 'space-between' }}
                     >
@@ -393,9 +364,8 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
                       <QrCode size={14} color="#06b6d4" />
                     </button>
 
-                    {/* Edit Patient Details Action */}
                     <button
-                      onClick={() => handleOpenEditModal(visit, patient)}
+                      onClick={() => handleOpenEditModal(qEntry, patient)}
                       className="btn btn-secondary"
                       style={{ width: '100%', fontSize: '0.8rem', justifyContent: 'space-between', borderColor: 'rgba(6, 182, 212, 0.3)' }}
                     >
@@ -403,26 +373,17 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
                       <Edit size={14} color="#06b6d4" />
                     </button>
 
-                    {/* Emergency Re-triage Override */}
-                    {!isRed && (
+                    {qEntry.triage_status !== 'Red' && (
                       <button
-                        onClick={() => handleElevateTriage(visit.id, 'RED')}
+                        onClick={() => handleElevateTriage(qEntry.id, 'Red')}
                         className="btn"
-                        style={{
-                          width: '100%',
-                          fontSize: '0.75rem',
-                          padding: '4px 8px',
-                          background: 'rgba(239, 68, 68, 0.1)',
-                          borderColor: 'rgba(239, 68, 68, 0.3)',
-                          color: '#fca5a5'
-                        }}
+                        style={{ width: '100%', fontSize: '0.75rem', padding: '4px 8px', background: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#fca5a5' }}
                       >
                         🚨 Elevate to RED Emergency
                       </button>
                     )}
 
                   </div>
-
                 </div>
               </div>
             );
@@ -430,24 +391,16 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
         </div>
       )}
 
-      {/* Edit Patient Modal Overlay */}
+      {/* Edit Patient Modal */}
       {editingItem && (
         <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '20px'
         }}>
           <div className="glass-panel" style={{ width: '100%', maxWidth: '750px', maxHeight: '90vh', overflowY: 'auto', padding: '24px', position: 'relative' }}>
-            
+
             <button
               onClick={() => setEditingItem(null)}
               style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
@@ -458,13 +411,13 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
               <Edit size={24} color="#06b6d4" />
               <h2 style={{ fontSize: '1.25rem', color: '#f8fafc', fontWeight: 700, margin: 0 }}>
-                Edit Patient & Visit Details — {editingItem.patient.full_name}
+                Edit Patient & Visit Details — {editingItem.patient.name}
               </h2>
             </div>
 
             <form onSubmit={handleSavePatientEdits}>
-              
-              {/* Patient Profile Details */}
+
+              {/* Patient Profile */}
               <h3 style={{ fontSize: '0.95rem', color: '#06b6d4', marginBottom: '12px' }}>1. Patient Profile Information</h3>
               <div className="grid-layout" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '20px' }}>
                 <div>
@@ -499,14 +452,14 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
 
               {/* Triage & Vitals */}
               <h3 style={{ fontSize: '0.95rem', color: '#06b6d4', marginBottom: '12px' }}>2. Visit Vitals & Triage Status</h3>
-              
+
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Triage Priority Level</label>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   {[
-                    { level: 'RED', label: '🚨 RED (Emergency)' },
-                    { level: 'YELLOW', label: '⚠️ YELLOW (Urgent)' },
-                    { level: 'GREEN', label: '🟢 GREEN (Standard)' }
+                    { level: 'Red', label: '🚨 RED (Emergency)', bg: 'var(--triage-red-bg)', border: '#ef4444' },
+                    { level: 'Yellow', label: '⚠️ YELLOW (Urgent)', bg: 'var(--triage-yellow-bg)', border: '#f59e0b' },
+                    { level: 'Green', label: '🟢 GREEN (Standard)', bg: 'var(--triage-green-bg)', border: '#10b981' }
                   ].map((t) => (
                     <button
                       key={t.level}
@@ -514,11 +467,9 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
                       onClick={() => setEditTriageStatus(t.level)}
                       className="btn"
                       style={{
-                        flex: 1,
-                        fontSize: '0.8rem',
-                        padding: '8px',
-                        background: editTriageStatus === t.level ? (t.level === 'RED' ? 'var(--triage-red-bg)' : t.level === 'YELLOW' ? 'var(--triage-yellow-bg)' : 'var(--triage-green-bg)') : 'rgba(15,23,42,0.5)',
-                        borderColor: editTriageStatus === t.level ? (t.level === 'RED' ? '#ef4444' : t.level === 'YELLOW' ? '#f59e0b' : '#10b981') : 'var(--border-color)',
+                        flex: 1, fontSize: '0.8rem', padding: '8px',
+                        background: editTriageStatus === t.level ? t.bg : 'rgba(15,23,42,0.5)',
+                        borderColor: editTriageStatus === t.level ? t.border : 'var(--border-color)',
                         color: editTriageStatus === t.level ? '#fff' : 'var(--text-muted)'
                       }}
                     >
@@ -529,31 +480,23 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
               </div>
 
               <div className="grid-layout" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', marginBottom: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Age (Yrs)</label>
-                  <input type="number" className="input-field" value={editAge} onChange={(e) => setEditAge(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>BP (sys/dia)</label>
-                  <input type="text" className="input-field" placeholder="120/80" value={editBp} onChange={(e) => setEditBp(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>SpO2 (%)</label>
-                  <input type="text" className="input-field" placeholder="98" value={editSpo2} onChange={(e) => setEditSpo2(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Pulse (bpm)</label>
-                  <input type="text" className="input-field" placeholder="78" value={editHeartRate} onChange={(e) => setEditHeartRate(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Temp (°F)</label>
-                  <input type="text" className="input-field" placeholder="98.6" value={editTemp} onChange={(e) => setEditTemp(e.target.value)} />
-                </div>
+                {[
+                  { label: 'Age (Yrs)', value: editAge, setter: setEditAge, type: 'number' },
+                  { label: 'BP (sys/dia)', value: editBp, setter: setEditBp, placeholder: '120/80', type: 'text' },
+                  { label: 'SpO2 (%)', value: editSpo2, setter: setEditSpo2, placeholder: '98', type: 'text' },
+                  { label: 'Pulse (bpm)', value: editHeartRate, setter: setEditHeartRate, placeholder: '78', type: 'text' },
+                  { label: 'Temp (°F)', value: editTemp, setter: setEditTemp, placeholder: '98.6', type: 'text' }
+                ].map(({ label, value, setter, placeholder, type }) => (
+                  <div key={label}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</label>
+                    <input type={type} className="input-field" placeholder={placeholder} value={value} onChange={(e) => setter(e.target.value)} />
+                  </div>
+                ))}
               </div>
 
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>ASHA Instructions / Notes for Doctor</label>
-                <textarea className="input-field" rows={2} value={editAshaInstructions} onChange={(e) => setEditAshaInstructions(e.target.value)} />
+                <textarea className="input-field" rows={2} value={editSurvivalInfo} onChange={(e) => setEditSurvivalInfo(e.target.value)} />
               </div>
 
               {/* Action Buttons */}
@@ -568,7 +511,6 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
               </div>
 
             </form>
-
           </div>
         </div>
       )}
@@ -576,4 +518,3 @@ export function QueueManager({ onSelectQR, onNavigateIntake }) {
     </div>
   );
 }
-

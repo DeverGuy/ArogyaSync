@@ -6,7 +6,7 @@ import { QrCode, Download, Printer, CheckCircle, ShieldCheck, Search, Scan } fro
 
 export function QRGenerator({ initialPatientId }) {
   const patients = useLiveQuery(() => db.patients.toArray(), []) || [];
-  const visits = useLiveQuery(() => db.visits.toArray(), []) || [];
+  const queueEntries = useLiveQuery(() => db.queue.toArray(), []) || [];
 
   const [selectedPatientId, setSelectedPatientId] = useState(initialPatientId || '');
   const [scannedPayloadInput, setScannedPayloadInput] = useState('');
@@ -21,20 +21,20 @@ export function QRGenerator({ initialPatientId }) {
   }, [initialPatientId, patients]);
 
   const selectedPatient = patients.find((p) => p.id === selectedPatientId);
-  const latestVisit = visits
-    .filter((v) => v.patient_id === selectedPatientId)
+  const latestQueueEntry = queueEntries
+    .filter((q) => q.patient_id === selectedPatientId)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
 
   // Construct compressed JSON payload for QR code
   const qrPayloadObj = selectedPatient ? {
     pid: selectedPatient.id,
-    name: selectedPatient.full_name,
+    name: selectedPatient.name,
     gender: selectedPatient.gender,
     blood: selectedPatient.blood_group,
     ePhone: selectedPatient.emergency_phone,
     hash: selectedPatient.qr_hash,
-    triage: latestVisit ? latestVisit.triage_status : 'GREEN',
-    vitals: latestVisit && latestVisit.vitals_summary ? JSON.parse(latestVisit.vitals_summary) : { bp: '120/80', spo2: '98%' }
+    triage: latestQueueEntry ? latestQueueEntry.triage_status : 'Green',
+    vitals: latestQueueEntry?.vitals ?? { bp: '120/80', spo2: '98%' }
   } : null;
 
   const qrString = qrPayloadObj ? JSON.stringify(qrPayloadObj) : '';
@@ -86,7 +86,7 @@ export function QRGenerator({ initialPatientId }) {
             >
               {patients.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.full_name} ({p.gender}, Blood: {p.blood_group})
+                  {p.name} ({p.gender}, Blood: {p.blood_group})
                 </option>
               ))}
             </select>
@@ -137,7 +137,7 @@ export function QRGenerator({ initialPatientId }) {
                   {/* Details */}
                   <div style={{ flex: 1, minWidth: '160px' }}>
                     <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#ffffff', marginBottom: '4px' }}>
-                      {selectedPatient.full_name}
+                      {selectedPatient.name}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '2px' }}>
                       Gender: <strong style={{ color: '#e2e8f0' }}>{selectedPatient.gender}</strong> | Blood: <strong style={{ color: '#06b6d4' }}>{selectedPatient.blood_group}</strong>

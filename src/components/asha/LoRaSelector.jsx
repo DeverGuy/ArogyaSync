@@ -4,7 +4,7 @@ import { db } from '../../lib/db';
 import { Radio, Send, ShieldAlert, CheckCircle2, Zap, SignalHigh } from 'lucide-react';
 
 export function LoRaSelector() {
-  const visits = useLiveQuery(() => db.visits.where('status').equals('WAITING').toArray(), []) || [];
+  const queueEntries = useLiveQuery(() => db.queue.where('status').equals('Waiting').toArray(), []) || [];
   const patients = useLiveQuery(() => db.patients.toArray(), []) || [];
 
   const patientMap = patients.reduce((acc, p) => {
@@ -12,25 +12,25 @@ export function LoRaSelector() {
     return acc;
   }, {});
 
-  const [selectedVisitIds, setSelectedVisitIds] = useState([]);
+  const [selectedQueueIds, setSelectedQueueIds] = useState([]);
   const [transmitting, setTransmitting] = useState(false);
   const [transmissionLog, setTransmissionLog] = useState([]);
 
-  const redVisits = visits.filter((v) => v.triage_status === 'RED');
+  const redEntries = queueEntries.filter((q) => q.triage_status === 'Red');
 
-  const handleToggleSelect = (visitId) => {
-    setSelectedVisitIds((prev) => 
-      prev.includes(visitId) ? prev.filter((id) => id !== visitId) : [...prev, visitId]
+  const handleToggleSelect = (queueId) => {
+    setSelectedQueueIds((prev) =>
+      prev.includes(queueId) ? prev.filter((id) => id !== queueId) : [...prev, queueId]
     );
   };
 
   const handleSelectAllRed = () => {
-    const redIds = redVisits.map((v) => v.id);
-    setSelectedVisitIds(redIds);
+    const redIds = redEntries.map((q) => q.id);
+    setSelectedQueueIds(redIds);
   };
 
   const handleSimulateLoRaTransmit = () => {
-    if (selectedVisitIds.length === 0) {
+    if (selectedQueueIds.length === 0) {
       alert('Select at least one patient record to transmit over LoRa simulation.');
       return;
     }
@@ -38,21 +38,21 @@ export function LoRaSelector() {
     setTransmitting(true);
     setTransmissionLog([]);
 
-    const selectedVisitsList = visits.filter((v) => selectedVisitIds.includes(v.id));
+    const selectedEntries = queueEntries.filter((q) => selectedQueueIds.includes(q.id));
 
     let delay = 500;
-    selectedVisitsList.forEach((visit, idx) => {
-      const patient = patientMap[visit.patient_id] || { full_name: 'Patient', blood_group: 'O+' };
-      const vitals = visit.vitals_summary ? JSON.parse(visit.vitals_summary) : {};
-      
+    selectedEntries.forEach((qEntry, idx) => {
+      const patient = patientMap[qEntry.patient_id] || { name: 'Patient', blood_group: 'O+' };
+      const vitals = qEntry.vitals || {};
+
       // Calculate packet payload byte size
       const packetPayload = JSON.stringify({
-        t: visit.triage_status,
-        name: patient.full_name,
+        t: qEntry.triage_status,
+        name: patient.name,
         blood: patient.blood_group,
         bp: vitals.bp,
         spo2: vitals.spo2,
-        notes: visit.asha_instructions
+        notes: qEntry.survival_info
       });
       const byteSize = new Blob([packetPayload]).size;
 
@@ -60,16 +60,16 @@ export function LoRaSelector() {
         setTransmissionLog((prev) => [
           ...prev,
           {
-            id: visit.id,
-            patientName: patient.full_name,
-            triage: visit.triage_status,
+            id: qEntry.id,
+            patientName: patient.name,
+            triage: qEntry.triage_status,
             size: byteSize,
             time: new Date().toLocaleTimeString(),
             status: 'TRANSMITTED_SUCCESS'
           }
         ]);
 
-        if (idx === selectedVisitsList.length - 1) {
+        if (idx === selectedEntries.length - 1) {
           setTransmitting(false);
         }
       }, delay);
@@ -105,17 +105,17 @@ export function LoRaSelector() {
               style={{ fontSize: '0.8rem', borderColor: 'var(--triage-red-border)', color: '#fca5a5' }}
             >
               <ShieldAlert size={14} color="#ef4444" />
-              <span>Auto-Select Emergency RED ({redVisits.length})</span>
+              <span>Auto-Select Emergency RED ({redEntries.length})</span>
             </button>
 
             <button
               onClick={handleSimulateLoRaTransmit}
-              disabled={transmitting || selectedVisitIds.length === 0}
+              disabled={transmitting || selectedQueueIds.length === 0}
               className="btn btn-primary"
               style={{ fontSize: '0.85rem' }}
             >
               <Send size={15} />
-              <span>{transmitting ? 'Transmitting Over LoRa...' : `Transmit ${selectedVisitIds.length} Packets`}</span>
+              <span>{transmitting ? 'Transmitting Over LoRa...' : `Transmit ${selectedQueueIds.length} Packets`}</span>
             </button>
           </div>
 
@@ -132,15 +132,16 @@ export function LoRaSelector() {
           </h3>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {visits.map((visit) => {
-              const patient = patientMap[visit.patient_id] || { full_name: 'Patient' };
-              const isSelected = selectedVisitIds.includes(visit.id);
-              const isRed = visit.triage_status === 'RED';
+            {queueEntries.map((qEntry) => {
+              const patient = patientMap[qEntry.patient_id] || { name: 'Patient' };
+              const isSelected = selectedQueueIds.includes(qEntry.id);
+              const isRed = qEntry.triage_status === 'Red';
+              const isYellow = qEntry.triage_status === 'Yellow';
 
               return (
                 <div
-                  key={visit.id}
-                  onClick={() => handleToggleSelect(visit.id)}
+                  key={qEntry.id}
+                  onClick={() => handleToggleSelect(qEntry.id)}
                   style={{
                     padding: '12px 16px',
                     borderRadius: '10px',
@@ -156,16 +157,16 @@ export function LoRaSelector() {
                     <input type="checkbox" checked={isSelected} onChange={() => {}} />
                     <div>
                       <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.9rem' }}>
-                        {patient.full_name}
+                        {patient.name}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Visit ID: {visit.id.slice(0, 8)}...
+                        Queue ID: {qEntry.id.slice(0, 8)}...
                       </div>
                     </div>
                   </div>
 
-                  <span className={`badge ${isRed ? 'badge-red' : visit.triage_status === 'YELLOW' ? 'badge-yellow' : 'badge-green'}`}>
-                    {visit.triage_status}
+                  <span className={`badge ${isRed ? 'badge-red' : isYellow ? 'badge-yellow' : 'badge-green'}`}>
+                    {qEntry.triage_status}
                   </span>
                 </div>
               );

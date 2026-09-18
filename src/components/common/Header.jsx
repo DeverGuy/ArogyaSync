@@ -15,12 +15,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../lib/db';
 
 export function Header({ activeTab, setActiveTab, isOnline, toggleOnline, onManualSync }) {
-  const pendingSyncItems = useLiveQuery(() => 
+  const pendingSyncItems = useLiveQuery(() =>
     db.sync_queue.where('status').equals('PENDING').count()
   , []) || 0;
 
   const totalPatientsInQueue = useLiveQuery(() =>
-    db.visits.where('status').equals('WAITING').count()
+    db.queue.where('status').equals('Waiting').count()
   , []) || 0;
 
   return (

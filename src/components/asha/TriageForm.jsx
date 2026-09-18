@@ -37,10 +37,10 @@ export function TriageForm({ onTriageComplete, isOnline }) {
     setSelectedPatientId(patientId);
     const p = existingPatients.find((item) => item.id === patientId);
     if (p) {
-      setFullName(p.full_name);
+      setFullName(p.name);
       setGender(p.gender);
       setBloodGroup(p.blood_group);
-      setPhoneNumber(p.phone_number);
+      setPhoneNumber(p.phone);
       setEmergencyPhone(p.emergency_phone);
     }
   };
@@ -59,17 +59,22 @@ export function TriageForm({ onTriageComplete, isOnline }) {
       let patientId = selectedPatientId;
       const now = new Date().toISOString();
 
-      // 1. Create Patient if new
+      // 1. Create Patient if new — fields aligned with Supabase patients table
       if (mode === 'new' || !patientId) {
         patientId = generateUUID();
         const qrHash = `AROGYA-${patientId.slice(0, 8)}-${bloodGroup}`;
         const newPatient = {
           id: patientId,
-          full_name: fullName.trim(),
+          name: fullName.trim(),
           gender,
           blood_group: bloodGroup,
-          phone_number: phoneNumber.trim() || 'N/A',
+          phone: phoneNumber.trim() || 'N/A',
           emergency_phone: emergencyPhone.trim() || 'N/A',
+          height: parseFloat(height) || null,
+          weight: parseFloat(weight) || null,
+          age: parseInt(age) || null,
+          vitals: {},
+          notes: '',
           qr_hash: qrHash,
           created_at: now
         };
@@ -78,8 +83,13 @@ export function TriageForm({ onTriageComplete, isOnline }) {
         await enqueueOfflineAction('patients', 'INSERT', newPatient);
       }
 
-      // 2. Create Visit & Triage Record
-      const visitId = generateUUID();
+      // 2. Create Queue entry — aligned with Supabase queue table
+      const queueId = generateUUID();
+
+      // Triage status: Title Case to match Supabase CHECK constraint ('Red'|'Yellow'|'Green')
+      const triageMap = { RED: 'Red', YELLOW: 'Yellow', GREEN: 'Green' };
+      const triageStatusMapped = triageMap[triageStatus] || 'Green';
+
       const vitalsObj = {
         bp: bp || '120/80',
         spo2: spo2 ? `${spo2}%` : '98%',
@@ -87,26 +97,25 @@ export function TriageForm({ onTriageComplete, isOnline }) {
         temp: temp ? `${temp}°F` : '98.6°F'
       };
 
-      const newVisit = {
-        id: visitId,
+      const newQueueEntry = {
+        id: queueId,
         patient_id: patientId,
-        visit_date: now,
-        age_at_visit: parseInt(age) || 30,
-        height: parseFloat(height) || 165,
-        weight: parseFloat(weight) || 60,
-        vitals_summary: JSON.stringify(vitalsObj),
-        triage_status: triageStatus,
-        asha_instructions: ashaInstructions.trim() || 'Digital Triage Intake by ASHA Worker.',
-        status: 'WAITING',
+        triage_status: triageStatusMapped,
+        survival_info: ashaInstructions.trim() || 'Digital Triage Intake by ASHA Worker.',
+        status: 'Waiting',
+        age: parseInt(age) || null,
+        height: parseFloat(height) || null,
+        weight: parseFloat(weight) || null,
+        vitals: vitalsObj,
         created_at: now,
         updated_at: now
       };
 
-      await db.visits.add(newVisit);
-      await enqueueOfflineAction('visits', 'INSERT', newVisit);
+      await db.queue.add(newQueueEntry);
+      await enqueueOfflineAction('queue', 'INSERT', newQueueEntry);
 
-      setSuccessMsg(`Patient ${fullName} successfully assigned ${triageStatus} Triage & added to Doctor Queue!`);
-      
+      setSuccessMsg(`Patient ${fullName} assigned ${triageStatusMapped} triage & added to Doctor queue!`);
+
       setTimeout(() => {
         if (onTriageComplete) onTriageComplete();
       }, 1200);
@@ -203,7 +212,7 @@ export function TriageForm({ onTriageComplete, isOnline }) {
                 <option value="">-- Choose Patient from Registry --</option>
                 {existingPatients.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.full_name} ({p.gender}, Blood: {p.blood_group}, Phone: {p.phone_number})
+                    {p.name} ({p.gender}, Blood: {p.blood_group}, Phone: {p.phone})
                   </option>
                 ))}
               </select>
