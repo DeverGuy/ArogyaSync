@@ -2,53 +2,107 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, generateUUID } from '../../lib/db';
 import { enqueueOfflineAction } from '../../lib/syncManager';
-import { AlertCircle, CheckCircle2, UserPlus, HeartPulse, ShieldAlert, ArrowRight } from 'lucide-react';
+import {
+  AlertCircle, CheckCircle2, UserPlus, HeartPulse, ShieldAlert,
+  ArrowRight, Stethoscope, BookHeart, AlertTriangle
+} from 'lucide-react';
 
+/**
+ * TriageForm — Full Patient Registration + Digital Triage Intake
+ *
+ * Handles two modes:
+ *   - New Patient: registers the patient AND creates a visit queue entry in one step
+ *   - Existing Patient (returning visit): loads profile, creates a new visit entry
+ *
+ * Captures:
+ *   Patient profile: name, gender, blood group, phone, emergency phone, allergies, critical history
+ *   Visit data: chief complaint, specialist required (from on-duty doctors), triage (Red/Yellow/Green),
+ *               vitals (BP, SpO2, HR, Temp), age, height, weight, ASHA notes for doctor
+ */
 export function TriageForm({ onTriageComplete, isOnline }) {
-  const existingPatients = useLiveQuery(() => db.patients.toArray(), []) || [];
+  const existingPatients  = useLiveQuery(() => db.patients.toArray(), []) || [];
+  // Only on-duty doctors are available for specialist assignment
+  const onDutyDoctors     = useLiveQuery(() => db.doctors.toArray().then(ds => ds.filter(d => d.is_on_duty === true)), []) || [];
 
-  const [mode, setMode] = useState('new'); // 'new' or 'existing'
+  const [mode, setMode] = useState('new'); // 'new' | 'existing'
   const [selectedPatientId, setSelectedPatientId] = useState('');
 
-  // Patient Info Form State
-  const [fullName, setFullName] = useState('');
-  const [gender, setGender] = useState('Male');
-  const [bloodGroup, setBloodGroup] = useState('O+');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  // ── Patient identity fields ──────────────────────────────────────────────
+  const [fullName, setFullName]           = useState('');
+  const [gender, setGender]               = useState('Male');
+  const [bloodGroup, setBloodGroup]       = useState('O+');
+  const [phoneNumber, setPhoneNumber]     = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
+  const [allergies, setAllergies]         = useState('');
+  const [criticalHistory, setCriticalHistory] = useState('');
 
-  // Triage & Vitals Form State
-  const [triageStatus, setTriageStatus] = useState('RED'); // Default to RED for high safety
-  const [age, setAge] = useState('45');
-  const [height, setHeight] = useState('168');
-  const [weight, setWeight] = useState('65');
-  
-  const [bp, setBp] = useState('130/85');
-  const [spo2, setSpo2] = useState('95');
-  const [heartRate, setHeartRate] = useState('88');
-  const [temp, setTemp] = useState('98.6');
+  // ── Visit / Triage fields ────────────────────────────────────────────────
+  const [chiefComplaint, setChiefComplaint]     = useState('');
+  const [specialistRequired, setSpecialistRequired] = useState('');
+  const [assignedDoctorId, setAssignedDoctorId] = useState('');
+  const [triageStatus, setTriageStatus]         = useState('Green');
 
+  const [age, setAge]           = useState('');
+  const [height, setHeight]     = useState('');
+  const [weight, setWeight]     = useState('');
+  const [bp, setBp]             = useState('');
+  const [spo2, setSpo2]         = useState('');
+  const [heartRate, setHeartRate] = useState('');
+  const [temp, setTemp]         = useState('');
   const [ashaInstructions, setAshaInstructions] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
+  const [successMsg, setSuccessMsg]     = useState('');
+  const [errorMsg, setErrorMsg]         = useState('');
+
+  // When a doctor is selected, auto-fill the specialist field with their specialty
+  const handleDoctorSelect = (doctorId) => {
+    setAssignedDoctorId(doctorId);
+    const doc = onDutyDoctors.find((d) => d.id === doctorId);
+    if (doc) setSpecialistRequired(doc.specialty);
+  };
 
   const handleSelectExisting = (patientId) => {
     setSelectedPatientId(patientId);
     const p = existingPatients.find((item) => item.id === patientId);
     if (p) {
-      setFullName(p.name);
-      setGender(p.gender);
-      setBloodGroup(p.blood_group);
-      setPhoneNumber(p.phone);
-      setEmergencyPhone(p.emergency_phone);
+      setFullName(p.name || '');
+      setGender(p.gender || 'Male');
+      setBloodGroup(p.blood_group || 'O+');
+      setPhoneNumber(p.phone || '');
+      setEmergencyPhone(p.emergency_phone || '');
+      setAllergies(p.allergies || '');
+      setCriticalHistory(p.critical_history || '');
     }
+  };
+
+  const resetForm = () => {
+    setFullName(''); setGender('Male'); setBloodGroup('O+');
+    setPhoneNumber(''); setEmergencyPhone('');
+    setAllergies(''); setCriticalHistory('');
+    setChiefComplaint(''); setSpecialistRequired(''); setAssignedDoctorId('');
+    setTriageStatus('Green');
+    setAge(''); setHeight(''); setWeight('');
+    setBp(''); setSpo2(''); setHeartRate(''); setTemp('');
+    setAshaInstructions('');
+    setSelectedPatientId('');
+    setErrorMsg('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
+
     if (!fullName.trim()) {
-      alert('Please enter patient full name');
+      setErrorMsg('Patient full name is required.');
+      return;
+    }
+    if (!chiefComplaint.trim()) {
+      setErrorMsg('Chief complaint / reason for visit is required.');
+      return;
+    }
+    if (!assignedDoctorId) {
+      setErrorMsg('Please assign a doctor from the on-duty roster before proceeding.');
       return;
     }
 
@@ -56,10 +110,10 @@ export function TriageForm({ onTriageComplete, isOnline }) {
     setSuccessMsg('');
 
     try {
-      let patientId = selectedPatientId;
       const now = new Date().toISOString();
+      let patientId = selectedPatientId;
 
-      // 1. Create Patient if new — fields aligned with Supabase patients table
+      // ── 1. Create Patient if new ────────────────────────────────────────
       if (mode === 'new' || !patientId) {
         patientId = generateUUID();
         const qrHash = `AROGYA-${patientId.slice(0, 8)}-${bloodGroup}`;
@@ -70,138 +124,145 @@ export function TriageForm({ onTriageComplete, isOnline }) {
           blood_group: bloodGroup,
           phone: phoneNumber.trim() || 'N/A',
           emergency_phone: emergencyPhone.trim() || 'N/A',
-          height: parseFloat(height) || null,
-          weight: parseFloat(weight) || null,
-          age: parseInt(age) || null,
-          vitals: {},
-          notes: '',
+          allergies: allergies.trim() || 'None known',
+          critical_history: criticalHistory.trim() || 'No significant history.',
           qr_hash: qrHash,
           created_at: now
         };
-
         await db.patients.add(newPatient);
         await enqueueOfflineAction('patients', 'INSERT', newPatient);
       }
 
-      // 2. Create Queue entry — aligned with Supabase queue table
-      const queueId = generateUUID();
-
-      // Triage status: Title Case to match Supabase CHECK constraint ('Red'|'Yellow'|'Green')
-      const triageMap = { RED: 'Red', YELLOW: 'Yellow', GREEN: 'Green' };
-      const triageStatusMapped = triageMap[triageStatus] || 'Green';
-
+      // ── 2. Create Visit (queue entry) ───────────────────────────────────
+      const visitId = generateUUID();
       const vitalsObj = {
-        bp: bp || '120/80',
-        spo2: spo2 ? `${spo2}%` : '98%',
-        heartRate: heartRate ? `${heartRate} bpm` : '75 bpm',
-        temp: temp ? `${temp}°F` : '98.6°F'
+        bp:        bp        ? bp               : '—',
+        spo2:      spo2      ? `${spo2}%`       : '—',
+        heartRate: heartRate ? `${heartRate} bpm` : '—',
+        temp:      temp      ? `${temp}°F`      : '—'
       };
 
-      const newQueueEntry = {
-        id: queueId,
+      const newVisit = {
+        id: visitId,
         patient_id: patientId,
-        triage_status: triageStatusMapped,
-        survival_info: ashaInstructions.trim() || 'Digital Triage Intake by ASHA Worker.',
+        doctor_id: assignedDoctorId,
+        triage_status: triageStatus,
+        specialist_required: specialistRequired,
+        chief_complaint: chiefComplaint.trim(),
+        survival_info: ashaInstructions.trim() || `Digital triage intake — ${chiefComplaint.trim()}`,
         status: 'Waiting',
         age: parseInt(age) || null,
         height: parseFloat(height) || null,
         weight: parseFloat(weight) || null,
         vitals: vitalsObj,
+        visit_date: now,
         created_at: now,
         updated_at: now
       };
 
-      await db.queue.add(newQueueEntry);
-      await enqueueOfflineAction('queue', 'INSERT', newQueueEntry);
+      await db.visits.add(newVisit);
+      await enqueueOfflineAction('visits', 'INSERT', newVisit);
 
-      setSuccessMsg(`Patient ${fullName} assigned ${triageStatusMapped} triage & added to Doctor queue!`);
+      const assignedDoc = onDutyDoctors.find((d) => d.id === assignedDoctorId);
+      setSuccessMsg(
+        `✅ ${fullName} registered with ${triageStatus} triage → Assigned to ${assignedDoc?.full_name || 'Doctor'}`
+      );
 
+      resetForm();
       setTimeout(() => {
+        setSuccessMsg('');
         if (onTriageComplete) onTriageComplete();
-      }, 1200);
+      }, 1800);
 
     } catch (err) {
-      console.error('Error adding patient triage:', err);
-      alert('Failed to save patient triage record. Check browser console.');
+      console.error('[TriageForm] Submit error:', err);
+      setErrorMsg('Failed to save patient record. Please check the browser console.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const triageOptions = [
+    {
+      key: 'Red',
+      label: '🚨 RED — EMERGENCY',
+      desc: 'Severe chest pain, stroke, unconsciousness, heavy bleeding, respiratory distress. Immediate intervention.',
+      bg: 'var(--triage-red-bg)',
+      border: 'var(--triage-red-solid)',
+      textColor: '#fca5a5'
+    },
+    {
+      key: 'Yellow',
+      label: '⚠️ YELLOW — URGENT',
+      desc: 'High fever (>101°F), persistent vomiting, severe acute pain, suspected fractures, moderate dehydration.',
+      bg: 'var(--triage-yellow-bg)',
+      border: 'var(--triage-yellow-solid)',
+      textColor: '#fde047'
+    },
+    {
+      key: 'Green',
+      label: '🟢 GREEN — STANDARD',
+      desc: 'Mild cold/cough, skin rash, routine checkup, prescription renewal, vaccination.',
+      bg: 'var(--triage-green-bg)',
+      border: 'var(--triage-green-solid)',
+      textColor: '#6ee7b7'
+    }
+  ];
+
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '960px', margin: '0 auto' }}>
       <div className="glass-panel" style={{ padding: '28px' }}>
-        
-        {/* Header Title */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+
+        {/* ── Header ──────────────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <UserPlus size={24} color="#06b6d4" />
-              <h2 style={{ fontSize: '1.35rem', color: '#f8fafc', fontWeight: 700 }}>Digital Triage & Patient Intake</h2>
+              <h2 style={{ fontSize: '1.35rem', color: '#f8fafc', fontWeight: 700, margin: 0 }}>
+                Digital Patient Intake & Triage
+              </h2>
             </div>
-            <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '4px' }}>
-              Assign emergency status to automatically prioritize patient in Doctor queue.
+            <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '4px', margin: 0 }}>
+              Register a new patient or record a returning visit. Assigns them to the smart queue with triage priority.
             </p>
           </div>
-
-          {/* New / Existing Toggle */}
           <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-input)', padding: '4px', borderRadius: '10px' }}>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => { setMode('new'); setSelectedPatientId(''); setFullName(''); }}
-              style={{
-                padding: '6px 14px',
-                fontSize: '0.8rem',
-                borderRadius: '8px',
-                background: mode === 'new' ? 'var(--primary)' : 'transparent',
-                color: mode === 'new' ? '#fff' : 'var(--text-muted)'
-              }}
-            >
-              New Patient
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setMode('existing')}
-              style={{
-                padding: '6px 14px',
-                fontSize: '0.8rem',
-                borderRadius: '8px',
-                background: mode === 'existing' ? 'var(--primary)' : 'transparent',
-                color: mode === 'existing' ? '#fff' : 'var(--text-muted)'
-              }}
-            >
-              Registered Patient
-            </button>
+            {[{ key: 'new', label: 'New Patient' }, { key: 'existing', label: 'Returning Patient' }].map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => { setMode(key); resetForm(); }}
+                style={{
+                  padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                  background: mode === key ? 'var(--primary)' : 'transparent',
+                  color: mode === key ? '#fff' : 'var(--text-muted)'
+                }}
+              >{label}</button>
+            ))}
           </div>
         </div>
 
+        {/* Alerts */}
         {successMsg && (
-          <div style={{
-            padding: '14px 18px',
-            background: 'rgba(16, 185, 129, 0.15)',
-            border: '1px solid rgba(16, 185, 129, 0.4)',
-            borderRadius: '12px',
-            color: '#6ee7b7',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            marginBottom: '20px',
-            fontSize: '0.9rem'
-          }}>
+          <div style={{ padding: '14px 18px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', borderRadius: '12px', color: '#6ee7b7', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', fontSize: '0.9rem' }}>
             <CheckCircle2 size={20} color="#10b981" />
             <span>{successMsg}</span>
           </div>
         )}
+        {errorMsg && (
+          <div style={{ padding: '14px 18px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '12px', color: '#fca5a5', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', fontSize: '0.9rem' }}>
+            <AlertCircle size={20} color="#ef4444" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
-          
-          {/* Patient Lookup if Existing */}
+
+          {/* ── Existing Patient Lookup ──────────────────────────────────── */}
           {mode === 'existing' && (
-            <div style={{ marginBottom: '20px', background: 'rgba(15, 23, 42, 0.5)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div style={{ marginBottom: '24px', background: 'rgba(15,23,42,0.5)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
-                Select Existing Patient
+                Select Patient from Registry
               </label>
               <select
                 className="input-field"
@@ -209,226 +270,184 @@ export function TriageForm({ onTriageComplete, isOnline }) {
                 onChange={(e) => handleSelectExisting(e.target.value)}
                 required={mode === 'existing'}
               >
-                <option value="">-- Choose Patient from Registry --</option>
+                <option value="">-- Search patient registry --</option>
                 {existingPatients.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} ({p.gender}, Blood: {p.blood_group}, Phone: {p.phone})
+                    {p.name} · {p.blood_group} · {p.phone}
                   </option>
                 ))}
               </select>
             </div>
           )}
 
-          {/* Section 1: Demographic Info */}
-          <div style={{ marginBottom: '24px' }}>
-            <h3 style={{ fontSize: '1rem', color: '#06b6d4', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>1. Basic Patient Information</span>
+          {/* ── Section 1: Patient Identity ──────────────────────────────── */}
+          <div style={{ marginBottom: '28px' }}>
+            <h3 style={{ fontSize: '0.9rem', color: '#06b6d4', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <UserPlus size={16} /> 1. Patient Identity
             </h3>
-            
-            <div className="grid-layout" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Full Name *</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="e.g. Priya Sharma"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  disabled={mode === 'existing' && selectedPatientId !== ''}
-                  required
-                />
-              </div>
-
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+              {[
+                { label: 'Full Name *', value: fullName, setter: setFullName, type: 'text', placeholder: 'e.g. Priya Sharma', disabled: mode === 'existing' && !!selectedPatientId },
+                { label: 'Phone Number', value: phoneNumber, setter: setPhoneNumber, type: 'tel', placeholder: '+91 98765 43210', disabled: mode === 'existing' && !!selectedPatientId },
+                { label: 'Emergency Contact', value: emergencyPhone, setter: setEmergencyPhone, type: 'tel', placeholder: '+91 98765 00000', disabled: mode === 'existing' && !!selectedPatientId },
+              ].map(({ label, value, setter, type, placeholder, disabled }) => (
+                <div key={label}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>{label}</label>
+                  <input type={type} className="input-field" placeholder={placeholder} value={value}
+                    onChange={(e) => setter(e.target.value)} disabled={disabled} required={label.includes('*')} />
+                </div>
+              ))}
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Gender</label>
-                <select
-                  className="input-field"
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  disabled={mode === 'existing' && selectedPatientId !== ''}
-                >
-                  <option value="Female">Female</option>
-                  <option value="Male">Male</option>
-                  <option value="Other">Other</option>
+                <select className="input-field" value={gender} onChange={(e) => setGender(e.target.value)} disabled={mode === 'existing' && !!selectedPatientId}>
+                  {['Male', 'Female', 'Other'].map((g) => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
-
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Blood Group</label>
-                <select
-                  className="input-field"
-                  value={bloodGroup}
-                  onChange={(e) => setBloodGroup(e.target.value)}
-                  disabled={mode === 'existing' && selectedPatientId !== ''}
-                >
-                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
-                    <option key={bg} value={bg}>{bg}</option>
-                  ))}
+                <select className="input-field" value={bloodGroup} onChange={(e) => setBloodGroup(e.target.value)} disabled={mode === 'existing' && !!selectedPatientId}>
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => <option key={bg} value={bg}>{bg}</option>)}
                 </select>
               </div>
+            </div>
+          </div>
 
+          {/* ── Section 2: Medical Background (QR-encoded) ───────────────── */}
+          <div style={{ marginBottom: '28px' }}>
+            <h3 style={{ fontSize: '0.9rem', color: '#06b6d4', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <BookHeart size={16} /> 2. Medical Background
+              <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+                (Encoded in patient QR code — offline accessible)
+              </span>
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Phone Number</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="+91 98765 43210"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  disabled={mode === 'existing' && selectedPatientId !== ''}
-                />
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                  Known Allergies
+                </label>
+                <textarea className="input-field" rows={2} placeholder="e.g. Penicillin, Aspirin — or 'None known'"
+                  value={allergies} onChange={(e) => setAllergies(e.target.value)}
+                  disabled={mode === 'existing' && !!selectedPatientId}
+                  style={{ resize: 'vertical' }} />
               </div>
-
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Emergency Contact Phone</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="+91 98765 00000"
-                  value={emergencyPhone}
-                  onChange={(e) => setEmergencyPhone(e.target.value)}
-                  disabled={mode === 'existing' && selectedPatientId !== ''}
-                />
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                  Critical Medical History
+                </label>
+                <textarea className="input-field" rows={2} placeholder="e.g. History of MI (2023), Hypertension, Diabetes"
+                  value={criticalHistory} onChange={(e) => setCriticalHistory(e.target.value)}
+                  disabled={mode === 'existing' && !!selectedPatientId}
+                  style={{ resize: 'vertical' }} />
               </div>
             </div>
           </div>
 
-          {/* Section 2: Digital Triage Level (Core Feature) */}
+          {/* ── Section 3: Visit Details & Specialist Assignment ─────────── */}
           <div style={{ marginBottom: '28px' }}>
-            <h3 style={{ fontSize: '1rem', color: '#06b6d4', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldAlert size={18} />
-              <span>2. Digital Triage Priority Assignment</span>
+            <h3 style={{ fontSize: '0.9rem', color: '#06b6d4', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <Stethoscope size={16} /> 3. Visit Details & Doctor Assignment
             </h3>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
-              
-              {/* RED Triage */}
-              <div
-                onClick={() => setTriageStatus('RED')}
-                style={{
-                  padding: '16px',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  border: triageStatus === 'RED' ? '2px solid var(--triage-red-solid)' : '1px solid var(--border-color)',
-                  background: triageStatus === 'RED' ? 'var(--triage-red-bg)' : 'rgba(15, 23, 42, 0.4)',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span className="badge badge-red">🚨 RED - EMERGENCY</span>
-                  <input type="radio" checked={triageStatus === 'RED'} onChange={() => {}} />
-                </div>
-                <p style={{ fontSize: '0.78rem', color: '#fca5a5' }}>
-                  Severe pain, heavy bleeding, chest tightness, stroke, unconsciousness. Immediate consultation required!
-                </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                  Chief Complaint / Reason for Visit *
+                </label>
+                <input type="text" className="input-field" placeholder="e.g. Severe chest pain, high fever"
+                  value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)} required />
               </div>
-
-              {/* YELLOW Triage */}
-              <div
-                onClick={() => setTriageStatus('YELLOW')}
-                style={{
-                  padding: '16px',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  border: triageStatus === 'YELLOW' ? '2px solid var(--triage-yellow-solid)' : '1px solid var(--border-color)',
-                  background: triageStatus === 'YELLOW' ? 'var(--triage-yellow-bg)' : 'rgba(15, 23, 42, 0.4)',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span className="badge badge-yellow">⚠️ YELLOW - URGENT</span>
-                  <input type="radio" checked={triageStatus === 'YELLOW'} onChange={() => {}} />
-                </div>
-                <p style={{ fontSize: '0.78rem', color: '#fde047' }}>
-                  High fever (&gt;101°F), severe acute pain, persistent vomiting, suspected fractures.
-                </p>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                  Assign to Doctor (On Duty) *
+                </label>
+                {onDutyDoctors.length === 0 ? (
+                  <div style={{ padding: '10px 14px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '10px', fontSize: '0.8rem', color: '#fde047', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <AlertTriangle size={14} />
+                    No doctors currently on duty. Go to the Duty Roster tab to set availability.
+                  </div>
+                ) : (
+                  <select className="input-field" value={assignedDoctorId} onChange={(e) => handleDoctorSelect(e.target.value)} required>
+                    <option value="">-- Select an on-duty doctor --</option>
+                    {onDutyDoctors.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.full_name} · {d.specialty}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
-
-              {/* GREEN Triage */}
-              <div
-                onClick={() => setTriageStatus('GREEN')}
-                style={{
-                  padding: '16px',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  border: triageStatus === 'GREEN' ? '2px solid var(--triage-green-solid)' : '1px solid var(--border-color)',
-                  background: triageStatus === 'GREEN' ? 'var(--triage-green-bg)' : 'rgba(15, 23, 42, 0.4)',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span className="badge badge-green">🟢 GREEN - STANDARD</span>
-                  <input type="radio" checked={triageStatus === 'GREEN'} onChange={() => {}} />
-                </div>
-                <p style={{ fontSize: '0.78rem', color: '#6ee7b7' }}>
-                  Mild cold/cough, skin rash, routine health checkup, prescription renewal, vaccine consultation.
-                </p>
-              </div>
-
             </div>
           </div>
 
-          {/* Section 3: Vitals & Observation */}
+          {/* ── Section 4: Triage Priority ───────────────────────────────── */}
           <div style={{ marginBottom: '28px' }}>
-            <h3 style={{ fontSize: '1rem', color: '#06b6d4', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <HeartPulse size={18} />
-              <span>3. Visit Vitals & ASHA Clinical Observations</span>
+            <h3 style={{ fontSize: '0.9rem', color: '#06b6d4', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <ShieldAlert size={16} /> 4. Triage Priority
             </h3>
-
-            <div className="grid-layout" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Age (Yrs)</label>
-                <input type="number" className="input-field" value={age} onChange={(e) => setAge(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Height (cm)</label>
-                <input type="number" className="input-field" value={height} onChange={(e) => setHeight(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Weight (kg)</label>
-                <input type="number" className="input-field" value={weight} onChange={(e) => setWeight(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>BP (sys/dia)</label>
-                <input type="text" className="input-field" placeholder="120/80" value={bp} onChange={(e) => setBp(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>SpO2 (%)</label>
-                <input type="number" className="input-field" placeholder="98" value={spo2} onChange={(e) => setSpo2(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Pulse (bpm)</label>
-                <input type="number" className="input-field" placeholder="78" value={heartRate} onChange={(e) => setHeartRate(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Temp (°F)</label>
-                <input type="text" className="input-field" placeholder="98.6" value={temp} onChange={(e) => setTemp(e.target.value)} />
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+              {triageOptions.map(({ key, label, desc, bg, border, textColor }) => (
+                <div
+                  key={key}
+                  onClick={() => setTriageStatus(key)}
+                  style={{
+                    padding: '16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s ease',
+                    border: triageStatus === key ? `2px solid ${border}` : '1px solid var(--border-color)',
+                    background: triageStatus === key ? bg : 'rgba(15,23,42,0.4)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.85rem', color: triageStatus === key ? textColor : 'var(--text-muted)' }}>
+                      {label}
+                    </span>
+                    <input type="radio" readOnly checked={triageStatus === key} style={{ accentColor: border }} />
+                  </div>
+                  <p style={{ fontSize: '0.78rem', color: triageStatus === key ? textColor : '#64748b', margin: 0, lineHeight: 1.5 }}>
+                    {desc}
+                  </p>
+                </div>
+              ))}
             </div>
+          </div>
 
+          {/* ── Section 5: Vitals ───────────────────────────────────────── */}
+          <div style={{ marginBottom: '28px' }}>
+            <h3 style={{ fontSize: '0.9rem', color: '#06b6d4', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <HeartPulse size={16} /> 5. Vitals & Biometrics
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+              {[
+                { label: 'Age (Yrs)', value: age, setter: setAge, type: 'number', placeholder: '45' },
+                { label: 'Height (cm)', value: height, setter: setHeight, type: 'number', placeholder: '168' },
+                { label: 'Weight (kg)', value: weight, setter: setWeight, type: 'number', placeholder: '65' },
+                { label: 'BP (sys/dia)', value: bp, setter: setBp, type: 'text', placeholder: '120/80' },
+                { label: 'SpO2 (%)', value: spo2, setter: setSpo2, type: 'number', placeholder: '98' },
+                { label: 'Pulse (bpm)', value: heartRate, setter: setHeartRate, type: 'number', placeholder: '78' },
+                { label: 'Temp (°F)', value: temp, setter: setTemp, type: 'text', placeholder: '98.6' }
+              ].map(({ label, value, setter, type, placeholder }) => (
+                <div key={label}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '5px' }}>{label}</label>
+                  <input type={type} className="input-field" placeholder={placeholder} value={value} onChange={(e) => setter(e.target.value)} />
+                </div>
+              ))}
+            </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                ASHA Worker Instructions / Symptoms Notes for Doctor
+                ASHA Notes / Critical Observations for Doctor
               </label>
-              <textarea
-                className="input-field"
-                rows={3}
-                placeholder="e.g. Patient feels dizzy when standing up. History of high BP. Prefers Hindi translation."
-                value={ashaInstructions}
-                onChange={(e) => setAshaInstructions(e.target.value)}
-              />
+              <textarea className="input-field" rows={3} style={{ resize: 'vertical' }}
+                placeholder="e.g. Patient is visibly distressed. Possible MI history — attach previous ECG. Prefers Hindi communication."
+                value={ashaInstructions} onChange={(e) => setAshaInstructions(e.target.value)} />
             </div>
           </div>
 
-          {/* Submit Action */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+          {/* ── Submit ──────────────────────────────────────────────────── */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={isSubmitting}
-              style={{ padding: '12px 28px', fontSize: '0.95rem' }}
+              disabled={isSubmitting || onDutyDoctors.length === 0}
+              style={{ padding: '12px 32px', fontSize: '0.95rem' }}
             >
-              {isSubmitting ? 'Saving to Queue...' : 'Assign Triage & Add to Doctor Queue'}
+              {isSubmitting ? 'Registering Patient…' : 'Register & Add to Smart Queue'}
               <ArrowRight size={18} />
             </button>
           </div>
