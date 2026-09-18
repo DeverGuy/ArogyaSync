@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import AshaDashboard from './pages/AshaDashboard';
@@ -6,8 +6,13 @@ import DoctorDashboard from './pages/DoctorDashboard';
 import LoRaReceiver from './pages/LoRaReceiver';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { seedInitialData } from './lib/db';
 
 export function App() {
+  useEffect(() => {
+    seedInitialData();
+  }, []);
+
   return (
     <ErrorBoundary>
       <Router>

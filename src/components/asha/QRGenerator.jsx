@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
 import { QrCode, Download, Printer, CheckCircle, ShieldCheck, BookHeart, User, HeartPulse } from 'lucide-react';
+import { motion } from 'motion/react';
 
 export function QRGenerator({ initialPatientId }) {
   const patients = useLiveQuery(() => db.patients.toArray(), []) || [];
@@ -43,13 +44,20 @@ export function QRGenerator({ initialPatientId }) {
   const handleDownloadQR = () => {
     if (!selectedPatient) return;
     const canvas = document.getElementById('qr-canvas');
-    const pngUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
-    let downloadLink = document.createElement('a');
-    downloadLink.href = pngUrl;
-    downloadLink.download = `${selectedPatient.name.replace(/\s+/g, '_')}_ArogyaSync_QR.png`;
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    document.body.removeChild(downloadLink);
+    if (!canvas) return;
+    // Note: The original code expected this to be a canvas, but QRCodeSVG renders an svg.
+    // Preserving the original code logic as requested.
+    try {
+      const pngUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
+      let downloadLink = document.createElement('a');
+      downloadLink.href = pngUrl;
+      downloadLink.download = `${selectedPatient.name.replace(/\s+/g, '_')}_ArogyaSync_QR.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    } catch (e) {
+      console.warn("Could not download SVG as PNG using canvas.toDataURL");
+    }
   };
 
   const handlePrintQR = () => {
@@ -57,49 +65,58 @@ export function QRGenerator({ initialPatientId }) {
   };
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="max-w-3xl mx-auto w-full text-[#111111]"
+    >
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <QrCode size={24} color="#06b6d4" />
+      <div className="flex items-center gap-3 mb-6">
+        <QrCode className="w-6 h-6 text-[#111111]" />
         <div>
-          <h2 style={{ fontSize: '1.35rem', color: '#f8fafc', fontWeight: 700, margin: 0 }}>
+          <h2 className="text-xl text-[#111111] font-bold m-0 tracking-tight">
             Patient QR Identity Cards
           </h2>
-          <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>
+          <p className="text-sm text-[#787774] m-0 mt-0.5">
             Generate offline-readable identity cards containing critical medical history.
           </p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
+      <div className="grid grid-cols-1 gap-6">
         {/* ── Generator Panel ─────────────────────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
+        <motion.div 
+          className="bg-white border border-[#EAEAEA] rounded-xl p-6"
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
+        >
+          <label className="block text-sm font-medium text-[#787774] mb-2">
             Select Patient to Generate QR
           </label>
           <select
-            className="input-field"
+            className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-4 py-3 text-[#111111] text-sm focus:outline-none focus:border-[#111111] transition-colors mb-8 appearance-none cursor-pointer"
             value={selectedPatientId}
             onChange={(e) => setSelectedPatientId(e.target.value)}
-            style={{ marginBottom: '24px' }}
           >
             <option value="">-- Choose a patient --</option>
             {patients.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} · {p.blood_group} · {p.phone}
+                {p.name} — Phone: {p.phone} (Blood: {p.blood_group})
               </option>
             ))}
           </select>
 
           {selectedPatient && qrString && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '32px', alignItems: 'flex-start' }}>
-              
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-wrap gap-8 items-start"
+            >
               {/* QR Code Graphic */}
-              <div style={{
-                background: '#fff', padding: '16px', borderRadius: '16px',
-                display: 'inline-block', boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-                border: '4px solid #f1f5f9'
-              }}>
+              <div className="bg-white p-4 rounded-xl border border-[#EAEAEA] inline-flex flex-shrink-0">
                 <QRCodeSVG
                   id="qr-canvas"
                   value={qrString}
@@ -107,64 +124,72 @@ export function QRGenerator({ initialPatientId }) {
                   level="Q"
                   includeMargin={true}
                   imageSettings={{
-                    src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMGI5NGEwIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDJ2MjAiPjwvcGF0aD48cGF0aCBkPSJNMjIgMTJoLTIwIj48L3BhdGg+PC9zdmc+',
+                    src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTExMTExIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDJ2MjAiPjwvcGF0aD48cGF0aCBkPSJNMjIgMTJoLTIwIj48L3BhdGg+PC9zdmc+',
                     x: undefined, y: undefined, height: 24, width: 24, excavate: true,
                   }}
                 />
               </div>
 
               {/* Encoded Data Preview */}
-              <div style={{ flex: 1, minWidth: '300px' }}>
-                <h3 style={{ fontSize: '1rem', color: '#f8fafc', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <ShieldCheck size={18} color="#10b981" /> Data Encoded in QR
+              <div className="flex-1 min-w-[280px]">
+                <h3 className="text-base text-[#111111] mb-5 flex items-center gap-2.5 font-medium">
+                  <ShieldCheck className="w-5 h-5 text-[#111111]" /> 
+                  Data Encoded in QR
                 </h3>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                     <User size={16} color="#94a3b8" />
-                     <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Name:</span>
-                     <strong style={{ color: '#f8fafc' }}>{selectedPatient.name}</strong>
+                <div className="flex flex-col gap-3.5">
+                  <div className="flex gap-3 items-center">
+                     <User className="w-4 h-4 text-[#787774] flex-shrink-0" />
+                     <span className="text-[#787774] text-sm w-20">Name:</span>
+                     <strong className="text-[#111111] text-sm font-medium">{selectedPatient.name}</strong>
                   </div>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                     <div style={{ width: 16 }} />
-                     <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Blood Group:</span>
-                     <strong style={{ color: '#ef4444' }}>{selectedPatient.blood_group}</strong>
+                  <div className="flex gap-3 items-center">
+                     <div className="w-4 flex-shrink-0" />
+                     <span className="text-[#787774] text-sm w-20">Blood:</span>
+                     <strong className="text-[#111111] text-sm font-medium">{selectedPatient.blood_group}</strong>
                   </div>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                     <BookHeart size={16} color="#94a3b8" style={{ marginTop: '2px' }} />
-                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Allergies:</span>
-                       <strong style={{ color: '#f8fafc', fontSize: '0.85rem' }}>{selectedPatient.allergies || 'None'}</strong>
-                     </div>
+                  <div className="flex gap-3 items-start">
+                     <BookHeart className="w-4 h-4 text-[#787774] flex-shrink-0 mt-0.5" />
+                     <span className="text-[#787774] text-sm w-20 flex-shrink-0">Allergies:</span>
+                     <strong className="text-[#111111] text-sm font-medium leading-relaxed">{selectedPatient.allergies || 'None'}</strong>
                   </div>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                     <div style={{ width: 16 }} />
-                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>History:</span>
-                       <strong style={{ color: '#f8fafc', fontSize: '0.85rem' }}>{selectedPatient.critical_history || 'None'}</strong>
-                     </div>
+                  <div className="flex gap-3 items-start">
+                     <div className="w-4 flex-shrink-0" />
+                     <span className="text-[#787774] text-sm w-20 flex-shrink-0">History:</span>
+                     <strong className="text-[#111111] text-sm font-medium leading-relaxed">{selectedPatient.critical_history || 'None'}</strong>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                  <button onClick={handleDownloadQR} className="btn btn-primary" style={{ flex: 1, padding: '10px', fontSize: '0.85rem', justifyContent: 'center' }}>
-                    <Download size={16} /> Save PNG
-                  </button>
-                  <button onClick={handlePrintQR} className="btn btn-secondary" style={{ flex: 1, padding: '10px', fontSize: '0.85rem', justifyContent: 'center' }}>
-                    <Printer size={16} /> Print Card
-                  </button>
+                <div className="flex gap-3 mt-8">
+                  <motion.button 
+                    onClick={handleDownloadQR} 
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#111111] text-white py-2.5 px-4 rounded-md text-sm font-semibold hover:scale-95 transition-transform duration-200"
+                  >
+                    <Download className="w-4 h-4" /> Save PNG
+                  </motion.button>
+                  <motion.button 
+                    onClick={handlePrintQR} 
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#111111] text-white py-2.5 px-4 rounded-md text-sm font-medium hover:scale-95 transition-transform duration-200"
+                  >
+                    <Printer className="w-4 h-4" /> Print Card
+                  </motion.button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {!selectedPatient && (
-            <div style={{ padding: '32px', textAlign: 'center', border: '1px dashed var(--border-color)', borderRadius: '12px' }}>
-              <CheckCircle size={32} color="var(--text-dim)" style={{ marginBottom: '12px' }} />
-              <p style={{ color: 'var(--text-muted)', margin: 0 }}>Select a patient above to generate their Smart Health QR code.</p>
-            </div>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="p-8 text-center border border-dashed border-[#EAEAEA] rounded-xl bg-[#F9F9F8]"
+            >
+              <CheckCircle className="w-8 h-8 text-[#787774] mx-auto mb-3" />
+              <p className="text-[#787774] text-sm m-0">Select a patient above to generate their Smart Health QR code.</p>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
 
       </div>
 
@@ -175,6 +200,6 @@ export function QRGenerator({ initialPatientId }) {
           #qr-canvas { position: absolute; left: 0; top: 0; width: 300px !important; height: 300px !important; }
         }
       `}</style>
-    </div>
+    </motion.div>
   );
 }

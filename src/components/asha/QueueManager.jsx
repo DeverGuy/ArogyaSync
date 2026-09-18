@@ -7,7 +7,8 @@ import {
   ChevronRight, QrCode, Filter, Edit, X, Save, Stethoscope, Clock,
   Upload, FileUp, FileText, User, Activity
 } from 'lucide-react';
-import { TriageForm } from './TriageForm'; // Import TriageForm
+import { TriageForm } from './TriageForm';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Triage sort priority: Red > Yellow > Green
 const TRIAGE_PRIORITY = { Red: 1, Yellow: 2, Green: 3 };
@@ -203,382 +204,398 @@ export function QueueManager({ onSelectQR }) {
     }
   };
 
-  // Badge styles
-  const triageBadgeClass = (t) => t === 'Red' ? 'badge badge-red' : t === 'Yellow' ? 'badge badge-yellow' : 'badge badge-green';
-  const triageBorderColor = (t) => t === 'Red' ? '#ef4444' : t === 'Yellow' ? '#f59e0b' : '#10b981';
+  const getTriageBadgeClasses = (t) => {
+    if (t === 'Red') return 'bg-[#FDEBEC] text-[#9F2F2D]';
+    if (t === 'Yellow') return 'bg-[#FBF3DB] text-[#956400]';
+    return 'bg-[#EDF3EC] text-[#346538]';
+  };
+
+  const getTriageBorderClass = (t) => {
+    if (t === 'Red') return 'border-l-[#9F2F2D]';
+    if (t === 'Yellow') return 'border-l-[#956400]';
+    return 'border-l-[#346538]';
+  };
 
   return (
-    <div>
+    <div className="w-full text-[#111111] bg-[#F9F9F8] min-h-full">
       {/* ── Stats ─────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-6">
         {[
-          { icon: <Users size={22} color="#06b6d4" />, bg: 'rgba(6,182,212,0.15)', value: visits.length, label: 'Total Active', color: '#f8fafc' },
-          { icon: <ShieldAlert size={22} color="#ef4444" />, bg: 'rgba(239,68,68,0.15)', value: countRed, label: 'Emergency (Red)', color: '#fca5a5', borderColor: '#ef4444' },
-          { icon: <AlertTriangle size={22} color="#f59e0b" />, bg: 'rgba(245,158,11,0.15)', value: countYellow, label: 'Urgent (Yellow)', color: '#fde047', borderColor: '#f59e0b' },
-          { icon: <CheckCircle size={22} color="#10b981" />, bg: 'rgba(16,185,129,0.15)', value: countGreen, label: 'Standard (Green)', color: '#6ee7b7', borderColor: '#10b981' },
-          { icon: <Stethoscope size={22} color="#06b6d4" />, bg: 'rgba(6,182,212,0.12)', value: countConsulting, label: 'With Doctor', color: '#67e8f9', borderColor: '#06b6d4' }
-        ].map(({ icon, bg, value, label, color, borderColor }, i) => (
-          <div key={i} className="glass-panel" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', borderLeft: borderColor ? `4px solid ${borderColor}` : undefined }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          { icon: <Users size={22} className="text-[#111111]" />, bg: 'bg-[#F9F9F8]', value: visits.length, label: 'Total Active', valColor: 'text-[#111111]' },
+          { icon: <ShieldAlert size={22} className="text-[#9F2F2D]" />, bg: 'bg-[#FDEBEC]', value: countRed, label: 'Emergency (Red)', valColor: 'text-[#9F2F2D]', borderColor: 'border-[#9F2F2D]' },
+          { icon: <AlertTriangle size={22} className="text-[#956400]" />, bg: 'bg-[#FBF3DB]', value: countYellow, label: 'Urgent (Yellow)', valColor: 'text-[#956400]', borderColor: 'border-[#956400]' },
+          { icon: <CheckCircle size={22} className="text-[#346538]" />, bg: 'bg-[#EDF3EC]', value: countGreen, label: 'Standard (Green)', valColor: 'text-[#346538]', borderColor: 'border-[#346538]' },
+          { icon: <Stethoscope size={22} className="text-[#111111]" />, bg: 'bg-[#F9F9F8]', value: countConsulting, label: 'With Doctor', valColor: 'text-[#111111]' }
+        ].map(({ icon, bg, value, label, valColor, borderColor }, i) => (
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} key={i} className={`bg-white border border-[#EAEAEA] rounded-xl p-4 flex items-center gap-3 ${borderColor ? `border-l-4 ${borderColor}` : ''}`}>
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${bg}`}>
               {icon}
             </div>
             <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color }}>{value}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{label}</div>
+              <div className={`text-2xl font-bold ${valColor}`}>{value}</div>
+              <div className="text-xs text-[#787774]">{label}</div>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 
       {/* ── Toolbar ───────────────────────────────────────────────────── */}
-      <div className="glass-panel" style={{ padding: '14px 18px', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <Filter size={16} color="#06b6d4" />
-          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter:</span>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white border border-[#EAEAEA] rounded-xl px-4 py-3.5 mb-4 flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Filter size={16} className="text-[#111111]" />
+          <span className="text-xs font-semibold text-[#787774]">Filter:</span>
           {['ALL', 'Red', 'Yellow', 'Green'].map((t) => (
             <button key={t} onClick={() => setFilterTriage(t)}
-              style={{
-                padding: '4px 12px', fontSize: '0.75rem', borderRadius: '20px', border: 'none', cursor: 'pointer',
-                background: filterTriage === t ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                color: filterTriage === t ? '#fff' : 'var(--text-muted)'
-              }}
+              className={`px-3 py-1 text-xs rounded-full transition-colors cursor-pointer ${
+                filterTriage === t
+                  ? 'bg-[#111111] text-white font-medium'
+                  : 'bg-[#F9F9F8] text-[#787774] hover:bg-[#EAEAEA]'
+              }`}
             >{t}</button>
           ))}
         </div>
-        <button onClick={() => setShowIntakeModal(true)} className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+        <button onClick={() => setShowIntakeModal(true)} className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#111111] text-white text-sm font-medium rounded-md hover:scale-95 transition-transform focus:outline-none cursor-pointer">
           + Register New Patient
         </button>
-      </div>
+      </motion.div>
 
       {/* ── Queue List ────────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
-        <div className="glass-panel" style={{ padding: '48px', textAlign: 'center' }}>
-          <CheckCircle size={48} color="var(--primary)" style={{ marginBottom: '16px', opacity: 0.8 }} />
-          <h3 style={{ fontSize: '1.2rem', color: '#f8fafc', margin: '0 0 8px' }}>Queue is Clear</h3>
-          <p style={{ color: 'var(--text-muted)', margin: 0 }}>No active patients match the current filter.</p>
-        </div>
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white border border-[#EAEAEA] rounded-xl p-12 text-center">
+          <CheckCircle size={48} className="text-[#EAEAEA] mx-auto mb-4 opacity-80" />
+          <h3 className="text-lg text-[#111111] font-medium mb-2">Queue is Clear</h3>
+          <p className="text-[#787774] m-0">No active patients match the current filter.</p>
+        </motion.div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {filtered.map((visit) => {
-            const patient = patientMap[visit.patient_id];
-            if (!patient) return null;
+        <div className="flex flex-col gap-4">
+          <AnimatePresence mode="popLayout">
+            {filtered.map((visit, idx) => {
+              const patient = patientMap[visit.patient_id];
+              if (!patient) return null;
 
-            const doc = doctorMap[visit.doctor_id];
+              const doc = doctorMap[visit.doctor_id];
 
-            return (
-              <div key={visit.id} className="glass-panel" style={{ padding: '20px', borderLeft: `4px solid ${triageBorderColor(visit.triage_status)}` }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'space-between' }}>
-                  
-                  {/* Left: Patient Info */}
-                  <div style={{ flex: 1, minWidth: '300px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-                      <div>
-                        <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          {patient.name}
-                          <span className={triageBadgeClass(visit.triage_status)} style={{ fontSize: '0.7rem' }}>
-                            {visit.triage_status}
-                          </span>
-                        </h3>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', gap: '12px' }}>
-                          <span>ID: {patient.id.slice(0, 8)}</span>
-                          <span>{patient.gender}</span>
-                          <span>{visit.age ? `${visit.age} yrs` : ''}</span>
+              return (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ delay: 0.1 + (idx * 0.05) }}
+                  key={visit.id}
+                  className={`bg-white border border-[#EAEAEA] rounded-xl p-5 border-l-4 ${getTriageBorderClass(visit.triage_status)}`}
+                >
+                  <div className="flex flex-wrap gap-5 justify-between">
+                    
+                    {/* Left: Patient Info */}
+                    <div className="flex-1 min-w-[300px]">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="text-lg font-bold text-[#111111] m-0 mb-1 flex items-center gap-2.5">
+                            {patient.name}
+                            <span className={`text-xs uppercase tracking-wider px-2.5 py-0.5 rounded-full ${getTriageBadgeClasses(visit.triage_status)}`}>
+                              {visit.triage_status}
+                            </span>
+                          </h3>
+                          <div className="text-xs text-[#787774] flex gap-3">
+                            <span>ID: {patient.id.slice(0, 8)}</span>
+                            <span>{patient.gender}</span>
+                            <span>{visit.age ? `${visit.age} yrs` : ''}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-black text-[#9F2F2D]">{patient.blood_group}</div>
+                          <div className="text-[10px] text-[#787774]">Blood</div>
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#ef4444' }}>{patient.blood_group}</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Blood</div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3.5">
+                        <div className="bg-[#F9F9F8] border border-[#EAEAEA] p-2.5 rounded-lg">
+                          <div className="text-[10px] text-[#787774]">Assigned To</div>
+                          <div className="text-sm text-[#111111] font-semibold">{doc ? `Dr. ${doc.full_name}` : 'Unassigned'}</div>
+                        </div>
+                        <div className="bg-[#F9F9F8] border border-[#EAEAEA] p-2.5 rounded-lg">
+                          <div className="text-[10px] text-[#787774]">Chief Complaint</div>
+                          <div className="text-sm text-[#111111] font-semibold">{visit.chief_complaint || '—'}</div>
+                        </div>
+                        <div className="bg-[#F9F9F8] border border-[#EAEAEA] p-2.5 rounded-lg">
+                          <div className="text-[10px] text-[#787774]">Phone</div>
+                          <div className="text-sm text-[#111111] font-semibold">{patient.phone || '—'}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-4">
+                        {visit.vitals && (
+                          <div className="flex gap-3 text-xs text-[#787774]">
+                            <span>BP: <strong className="text-[#111111]">{visit.vitals.bp || '—'}</strong></span>
+                            <span>SpO2: <strong className="text-[#111111]">{visit.vitals.spo2 || '—'}</strong></span>
+                            <span>HR: <strong className="text-[#111111]">{visit.vitals.heartRate || '—'}</strong></span>
+                          </div>
+                        )}
+                        {visit.survival_info && (
+                          <p className="text-xs text-[#787774] italic bg-[#F9F9F8] border border-[#EAEAEA] px-2.5 py-1.5 rounded-md m-0 mt-1">
+                            "{visit.survival_info}"
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '14px' }}>
-                      <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Assigned To</div>
-                        <div style={{ fontSize: '0.85rem', color: '#e2e8f0', fontWeight: 600 }}>{doc ? `Dr. ${doc.full_name}` : 'Unassigned'}</div>
-                      </div>
-                      <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Chief Complaint</div>
-                        <div style={{ fontSize: '0.85rem', color: '#e2e8f0', fontWeight: 600 }}>{visit.chief_complaint || '—'}</div>
-                      </div>
-                      <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Phone</div>
-                        <div style={{ fontSize: '0.85rem', color: '#e2e8f0', fontWeight: 600 }}>{patient.phone || '—'}</div>
-                      </div>
-                    </div>
+                    {/* Right: Actions */}
+                    <div className="flex flex-col gap-2 min-w-[190px]">
 
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-                      {visit.vitals && (
-                        <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', color: '#94a3b8' }}>
-                          <span>BP: <strong style={{ color: '#06b6d4' }}>{visit.vitals.bp || '—'}</strong></span>
-                          <span>SpO2: <strong style={{ color: '#10b981' }}>{visit.vitals.spo2 || '—'}</strong></span>
-                          <span>HR: <strong style={{ color: '#f59e0b' }}>{visit.vitals.heartRate || '—'}</strong></span>
+                      {visit.status === 'Waiting' && (
+                        <button
+                          onClick={() => handleSendToDoctor(visit.id)}
+                          disabled={isDoctorBusy}
+                          className={`flex items-center justify-between w-full text-xs px-3 py-2.5 rounded-md transition-transform ${
+                            isDoctorBusy 
+                              ? 'bg-[#F9F9F8] text-[#787774] border border-[#EAEAEA] cursor-not-allowed' 
+                              : 'bg-[#111111] text-white hover:scale-95 cursor-pointer'
+                          }`}
+                          title={isDoctorBusy ? 'Doctor is currently busy with a patient' : ''}
+                        >
+                          <span>{isDoctorBusy ? 'Doctor Busy' : 'Send to Doctor'}</span>
+                          <ChevronRight size={14} />
+                        </button>
+                      )}
+                      
+                      {visit.status === 'In Consultation' && (
+                        <div className="w-full text-xs px-3 py-2.5 bg-[#FBF3DB] text-[#956400] rounded-md text-center font-semibold">
+                          Sent to Doctor
                         </div>
                       )}
-                      {visit.survival_info && (
-                        <p style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic', background: 'rgba(0,0,0,0.2)', padding: '6px 10px', borderRadius: '6px', margin: '4px 0 0' }}>
-                          "{visit.survival_info}"
-                        </p>
+                      
+                      {visit.status === 'In Progress' && (
+                        <div className="flex items-center justify-center gap-2 w-full text-xs px-3 py-2.5 bg-[#F9F9F8] border border-[#EAEAEA] text-[#111111] rounded-md text-center font-semibold">
+                          <Stethoscope size={16} /> With Doctor
+                        </div>
+                      )}
+
+                      <button onClick={() => onSelectQR(visit.patient_id)} className="flex items-center justify-between w-full text-xs px-3 py-2 bg-white border border-[#EAEAEA] text-[#111111] rounded-md hover:scale-95 transition-transform cursor-pointer">
+                        <span>Generate QR</span>
+                        <QrCode size={14} className="text-[#111111]" />
+                      </button>
+
+                      <button onClick={() => openEditModal(visit)} className="flex items-center justify-between w-full text-xs px-3 py-2 bg-white border border-[#EAEAEA] text-[#111111] rounded-md hover:scale-95 transition-transform cursor-pointer">
+                        <span>Edit Details</span>
+                        <Edit size={14} className="text-[#111111]" />
+                      </button>
+
+                      {visit.triage_status !== 'Red' && visit.status === 'Waiting' && (
+                        <button onClick={() => handleElevateTriage(visit.id, 'Red')} 
+                          className="w-full text-[10px] px-2 py-1.5 bg-[#FDEBEC] text-[#9F2F2D] rounded-md mt-1 hover:scale-95 transition-transform cursor-pointer font-medium uppercase tracking-wider">
+                          Elevate to RED
+                        </button>
                       )}
                     </div>
                   </div>
-
-                  {/* Right: Actions */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '190px' }}>
-
-                    {visit.status === 'Waiting' && (
-                      <button
-                        onClick={() => handleSendToDoctor(visit.id)}
-                        className="btn"
-                        disabled={isDoctorBusy}
-                        style={{
-                          width: '100%', fontSize: '0.82rem', padding: '9px 12px',
-                          justifyContent: 'space-between',
-                          background: isDoctorBusy ? 'rgba(255,255,255,0.05)' : 'rgba(13,148,136,0.2)', 
-                          border: isDoctorBusy ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(13,148,136,0.5)',
-                          color: isDoctorBusy ? '#64748b' : '#5eead4',
-                          cursor: isDoctorBusy ? 'not-allowed' : 'pointer'
-                        }}
-                        title={isDoctorBusy ? 'Doctor is currently busy with a patient' : ''}
-                      >
-                        <span>{isDoctorBusy ? 'Doctor Busy' : 'Send to Doctor'}</span>
-                        <ChevronRight size={14} />
-                      </button>
-                    )}
-                    
-                    {visit.status === 'In Consultation' && (
-                      <div style={{
-                        width: '100%', fontSize: '0.82rem', padding: '9px 12px',
-                        background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)',
-                        color: '#fde047', borderRadius: '8px', textAlign: 'center', fontWeight: 600
-                      }}>
-                        Sent to Doctor
-                      </div>
-                    )}
-                    
-                    {visit.status === 'In Progress' && (
-                      <div style={{
-                        width: '100%', fontSize: '0.82rem', padding: '9px 12px',
-                        background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
-                        color: '#93c5fd', borderRadius: '8px', textAlign: 'center', fontWeight: 600,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                      }}>
-                        <Stethoscope size={16} /> With Doctor
-                      </div>
-                    )}
-
-                    <button onClick={() => onSelectQR(visit.patient_id)} className="btn btn-secondary"
-                      style={{ width: '100%', fontSize: '0.8rem', justifyContent: 'space-between' }}>
-                      <span>Generate QR</span>
-                      <QrCode size={14} color="#06b6d4" />
-                    </button>
-
-                    <button onClick={() => openEditModal(visit)} className="btn btn-secondary"
-                      style={{ width: '100%', fontSize: '0.8rem', justifyContent: 'space-between', borderColor: 'rgba(6,182,212,0.3)' }}>
-                      <span>Edit Details</span>
-                      <Edit size={14} color="#06b6d4" />
-                    </button>
-
-                    {visit.triage_status !== 'Red' && visit.status === 'Waiting' && (
-                      <button onClick={() => handleElevateTriage(visit.id, 'Red')} className="btn"
-                        style={{ width: '100%', fontSize: '0.75rem', padding: '6px 8px', background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)', color: '#fca5a5', marginTop: '4px' }}>
-                        🚨 Elevate to RED
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>
       )}
 
       {/* ── Edit Patient/Visit Details Modal ──────────────────────────── */}
-      {editingVisit && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px',
-          overflowY: 'auto'
-        }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '720px', padding: '28px', position: 'relative', margin: 'auto' }}>
-            <button onClick={() => setEditingVisit(null)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-              <X size={20} />
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-              <Edit size={22} color="#06b6d4" />
-              <h2 style={{ fontSize: '1.2rem', color: '#f8fafc', fontWeight: 700, margin: 0 }}>
-                Edit Details — {editData.name || 'Patient'}
-              </h2>
-            </div>
-            
-            <form onSubmit={handleSaveEdits}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                
-                {/* Column 1: Patient Identity & History */}
-                <div>
-                  <h3 style={{ fontSize: '0.9rem', color: '#06b6d4', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                    <User size={16} /> Patient Identity
+      <AnimatePresence>
+        {editingVisit && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/20 flex items-center justify-center z-[1000] p-5 overflow-y-auto"
+          >
+            <motion.div 
+              initial={{ y: 12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 12, opacity: 0 }}
+              className="bg-white border border-[#EAEAEA] rounded-xl w-full max-w-3xl p-7 relative m-auto shadow-lg"
+            >
+              <button onClick={() => setEditingVisit(null)} className="absolute top-4 right-4 text-[#787774] hover:text-[#111111] bg-transparent border-none cursor-pointer transition-colors p-1">
+                <X size={20} />
+              </button>
+              <div className="flex items-center gap-2.5 mb-5">
+                <Edit size={22} className="text-[#111111]" />
+                <h2 className="text-xl text-[#111111] font-bold m-0">
+                  Edit Details — {editData.name || 'Patient'}
+                </h2>
+              </div>
+              
+              <form onSubmit={handleSaveEdits}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  
+                  {/* Column 1: Patient Identity & History */}
+                  <div>
+                    <h3 className="text-sm text-[#111111] flex items-center gap-1.5 mb-3 font-semibold">
+                      <User size={16} /> Patient Identity
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <label className="block text-xs text-[#787774] mb-1">Full Name</label>
+                        <input type="text" name="name" className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white" value={editData.name} onChange={handleFieldChange} required />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-xs text-[#787774] mb-1">Phone</label>
+                          <input type="text" name="phone" className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white" value={editData.phone} onChange={handleFieldChange} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#787774] mb-1">Blood Group</label>
+                          <input type="text" name="blood_group" className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white" value={editData.blood_group} onChange={handleFieldChange} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[#9F2F2D] mb-1">Allergies</label>
+                        <input type="text" name="allergies" className="w-full bg-[#FDEBEC]/50 border border-[#9F2F2D]/30 rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#9F2F2D] focus:bg-white" value={editData.allergies} onChange={handleFieldChange} />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[#956400] mb-1">Critical Medical History</label>
+                        <input type="text" name="critical_history" className="w-full bg-[#FBF3DB]/50 border border-[#956400]/30 rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#956400] focus:bg-white" value={editData.critical_history} onChange={handleFieldChange} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Column 2: Current Visit & Vitals */}
+                  <div>
+                    <h3 className="text-sm text-[#111111] flex items-center gap-1.5 mb-3 font-semibold">
+                      <Activity size={16} /> Current Visit
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      
+                      <div>
+                        <label className="block text-xs text-[#787774] mb-1.5">Triage Priority</label>
+                        <div className="flex gap-2">
+                          {[
+                            { key: 'Red', label: 'Red', activeBg: 'bg-[#FDEBEC] text-[#9F2F2D] border-[#9F2F2D]/50' },
+                            { key: 'Yellow', label: 'Yellow', activeBg: 'bg-[#FBF3DB] text-[#956400] border-[#956400]/50' },
+                            { key: 'Green', label: 'Green', activeBg: 'bg-[#EDF3EC] text-[#346538] border-[#346538]/50' }
+                          ].map(({ key, label, activeBg }) => (
+                            <button key={key} type="button" onClick={() => setEditData({ ...editData, triage_status: key })}
+                              className={`flex-1 py-1.5 text-xs rounded-md transition-colors border cursor-pointer font-medium ${
+                                editData.triage_status === key 
+                                  ? activeBg 
+                                  : 'bg-[#F9F9F8] text-[#787774] border-[#EAEAEA] hover:bg-[#EAEAEA]'
+                              }`}
+                            >{label}</button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs text-[#787774] mb-1">Chief Complaint</label>
+                        <input type="text" name="chief_complaint" className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white" value={editData.chief_complaint} onChange={handleFieldChange} />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-xs text-[#787774] mb-1">BP</label>
+                          <input type="text" name="bp" className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white" value={editData.bp} onChange={handleFieldChange} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#787774] mb-1">SpO2 (%)</label>
+                          <input type="text" name="spo2" className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white" value={editData.spo2} onChange={handleFieldChange} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#787774] mb-1">Heart Rate</label>
+                          <input type="text" name="heartRate" className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white" value={editData.heartRate} onChange={handleFieldChange} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#787774] mb-1">Temp (°F)</label>
+                          <input type="text" name="temp" className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white" value={editData.temp} onChange={handleFieldChange} />
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* ASHA Note (Full Width) */}
+                <div className="mt-4">
+                  <label className="block text-xs text-[#787774] mb-1.5">ASHA Critical Intake Notes (for Doctor)</label>
+                  <textarea name="survival_info" rows={2} className="w-full bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] focus:bg-white resize-y" value={editData.survival_info} onChange={handleFieldChange} />
+                </div>
+
+                {/* Documents Management */}
+                <div className="mt-6 pt-4 border-t border-[#EAEAEA]">
+                  <h3 className="text-sm text-[#111111] flex items-center gap-1.5 mb-3 font-semibold">
+                    <FileText size={16} /> Attached Documents
                   </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Full Name</label>
-                      <input type="text" name="name" className="input-field" value={editData.name} onChange={handleFieldChange} required />
+                  
+                  {/* Upload Section */}
+                  <div className="flex gap-3 items-start mb-4 p-3 bg-[#F9F9F8] rounded-lg border border-[#EAEAEA]">
+                    <div className="flex-1">
+                      <select className="w-full bg-white border border-[#EAEAEA] rounded-md px-3 py-2 text-sm text-[#111111] focus:outline-none focus:border-[#111111] mb-2 cursor-pointer" value={docType} onChange={(e) => setDocType(e.target.value)}>
+                        <option value="LAB_REPORT">Lab Report</option>
+                        <option value="XRAY">X-Ray Image</option>
+                        <option value="ECG">ECG / EKG</option>
+                        <option value="PRESCRIPTION">Prescription</option>
+                      </select>
+                      <input type="file" accept="image/*,application/pdf" onChange={(e) => setDocFile(e.target.files[0])} className="text-xs text-[#787774] w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-[#EAEAEA] file:text-[#111111] hover:file:bg-[#D1D1D1] file:cursor-pointer cursor-pointer" />
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Phone</label>
-                        <input type="text" name="phone" className="input-field" value={editData.phone} onChange={handleFieldChange} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Blood Group</label>
-                        <input type="text" name="blood_group" className="input-field" value={editData.blood_group} onChange={handleFieldChange} />
-                      </div>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#fca5a5', marginBottom: '4px' }}>Allergies</label>
-                      <input type="text" name="allergies" className="input-field" value={editData.allergies} onChange={handleFieldChange} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#fde047', marginBottom: '4px' }}>Critical Medical History</label>
-                      <input type="text" name="critical_history" className="input-field" value={editData.critical_history} onChange={handleFieldChange} />
-                    </div>
+                    <button type="button" onClick={handleConfirmUpload} disabled={!docFile || docUploading} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-[#111111] text-white text-sm font-medium rounded-md hover:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed h-fit cursor-pointer">
+                      <Upload size={14} /> {docUploading ? 'Uploading...' : 'Upload'}
+                    </button>
+                  </div>
+
+                  {/* List Section */}
+                  <div className="flex flex-col gap-2">
+                    {documents.filter(d => d.patient_id === editingVisit.patient_id).length === 0 ? (
+                      <p className="text-xs text-[#787774] m-0">No documents uploaded.</p>
+                    ) : (
+                      documents.filter(d => d.patient_id === editingVisit.patient_id).map(doc => (
+                        <div key={doc.id} className="flex justify-between items-center p-2.5 bg-white rounded-lg border border-[#EAEAEA]">
+                          <div>
+                            <div className="text-xs text-[#111111] font-semibold">{doc.document_type}</div>
+                            <div className="text-[10px] text-[#787774]">{new Date(doc.uploaded_at).toLocaleString()}</div>
+                          </div>
+                          <button type="button" onClick={() => handleDeleteDoc(doc.id)} className="px-2 py-1 bg-[#FDEBEC] text-[#9F2F2D] text-[10px] rounded hover:scale-95 transition-transform cursor-pointer font-medium uppercase tracking-wider">
+                            Delete
+                          </button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
-                {/* Column 2: Current Visit & Vitals */}
-                <div>
-                  <h3 style={{ fontSize: '0.9rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                    <Activity size={16} /> Current Visit
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Triage Priority</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        {[
-                          { key: 'Red', label: 'Red', bg: 'var(--triage-red-bg)', border: '#ef4444' },
-                          { key: 'Yellow', label: 'Yellow', bg: 'var(--triage-yellow-bg)', border: '#f59e0b' },
-                          { key: 'Green', label: 'Green', bg: 'var(--triage-green-bg)', border: '#10b981' }
-                        ].map(({ key, label, bg, border }) => (
-                          <button key={key} type="button" onClick={() => setEditData({ ...editData, triage_status: key })}
-                            style={{
-                              flex: 1, padding: '6px', fontSize: '0.75rem', borderRadius: '6px', cursor: 'pointer', border: `1px solid ${editData.triage_status === key ? border : 'var(--border-color)'}`,
-                              background: editData.triage_status === key ? bg : 'rgba(15,23,42,0.5)', color: editData.triage_status === key ? '#fff' : 'var(--text-muted)'
-                            }}
-                          >{label}</button>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Chief Complaint</label>
-                      <input type="text" name="chief_complaint" className="input-field" value={editData.chief_complaint} onChange={handleFieldChange} />
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>BP</label>
-                        <input type="text" name="bp" className="input-field" value={editData.bp} onChange={handleFieldChange} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>SpO2 (%)</label>
-                        <input type="text" name="spo2" className="input-field" value={editData.spo2} onChange={handleFieldChange} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Heart Rate</label>
-                        <input type="text" name="heartRate" className="input-field" value={editData.heartRate} onChange={handleFieldChange} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Temp (°F)</label>
-                        <input type="text" name="temp" className="input-field" value={editData.temp} onChange={handleFieldChange} />
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
-              </div>
-
-              {/* ASHA Note (Full Width) */}
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>ASHA Critical Intake Notes (for Doctor)</label>
-                <textarea name="survival_info" className="input-field" rows={2} value={editData.survival_info} onChange={handleFieldChange} style={{ resize: 'vertical' }} />
-              </div>
-
-              {/* Documents Management */}
-              <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <h3 style={{ fontSize: '0.9rem', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                  <FileText size={16} /> Attached Documents
-                </h3>
-                
-                {/* Upload Section */}
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', marginBottom: '16px', padding: '12px', background: 'rgba(15,23,42,0.3)', borderRadius: '8px' }}>
-                  <div style={{ flex: 1 }}>
-                    <select className="input-field" value={docType} onChange={(e) => setDocType(e.target.value)} style={{ marginBottom: '8px' }}>
-                      <option value="LAB_REPORT">Lab Report</option>
-                      <option value="XRAY">X-Ray Image</option>
-                      <option value="ECG">ECG / EKG</option>
-                      <option value="PRESCRIPTION">Prescription</option>
-                    </select>
-                    <input type="file" accept="image/*,application/pdf" onChange={(e) => setDocFile(e.target.files[0])} style={{ color: 'var(--text-muted)', fontSize: '0.75rem', width: '100%' }} />
-                  </div>
-                  <button type="button" className="btn btn-primary" onClick={handleConfirmUpload} disabled={!docFile || docUploading} style={{ padding: '8px 16px', height: 'fit-content' }}>
-                    <Upload size={14} /> {docUploading ? 'Uploading...' : 'Upload'}
+                <div className="flex gap-2.5 justify-end mt-6">
+                  <button type="button" onClick={() => setEditingVisit(null)} className="px-4 py-2 bg-white border border-[#EAEAEA] text-[#111111] text-sm font-medium rounded-md hover:scale-95 transition-transform cursor-pointer">Cancel</button>
+                  <button type="submit" className="flex items-center justify-center gap-1.5 px-5 py-2 bg-[#111111] text-white text-sm font-medium rounded-md hover:scale-95 transition-transform cursor-pointer">
+                    <Save size={15} /> Save All Details
                   </button>
                 </div>
-
-                {/* List Section */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {documents.filter(d => d.patient_id === editingVisit.patient_id).length === 0 ? (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>No documents uploaded.</p>
-                  ) : (
-                    documents.filter(d => d.patient_id === editingVisit.patient_id).map(doc => (
-                      <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(15,23,42,0.5)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                        <div>
-                          <div style={{ fontSize: '0.8rem', color: '#f8fafc', fontWeight: 600 }}>{doc.document_type}</div>
-                          <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>{new Date(doc.uploaded_at).toLocaleString()}</div>
-                        </div>
-                        <button type="button" onClick={() => handleDeleteDoc(doc.id)} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem' }}>
-                          Delete
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '24px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingVisit(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ padding: '8px 24px' }}>
-                  <Save size={15} /> Save All Details
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Intake Form Modal ─────────────────────────────────────────── */}
-      {showIntakeModal && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, padding: '20px',
-          overflowY: 'auto'
-        }}>
-          <div style={{ width: '100%', maxWidth: '960px', position: 'relative', margin: '20px auto' }}>
-            <button
-              onClick={() => setShowIntakeModal(false)}
-              style={{
-                position: 'absolute', right: '16px', top: '16px', zIndex: 10,
-                background: 'rgba(15,23,42,0.8)', border: '1px solid var(--border-color)',
-                color: '#f8fafc', padding: '8px', borderRadius: '50%', cursor: 'pointer'
-              }}
+      <AnimatePresence>
+        {showIntakeModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/20 flex items-start justify-center z-[1000] p-5 overflow-y-auto"
+          >
+            <motion.div 
+              initial={{ y: 12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 12, opacity: 0 }}
+              className="w-full max-w-4xl relative my-5 mx-auto"
             >
-              <X size={20} />
-            </button>
-            <TriageForm onTriageComplete={() => setShowIntakeModal(false)} />
-          </div>
-        </div>
-      )}
+              <button
+                onClick={() => setShowIntakeModal(false)}
+                className="absolute right-4 top-4 z-10 bg-white border border-[#EAEAEA] text-[#787774] hover:text-[#111111] p-2 rounded-full hover:scale-95 transition-transform cursor-pointer shadow-sm"
+              >
+                <X size={20} />
+              </button>
+              <TriageForm onTriageComplete={() => setShowIntakeModal(false)} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -5,23 +5,11 @@ import {
   Radio, Send, ShieldAlert, CheckCircle2, Zap, SignalHigh,
   AlertTriangle, X, Clock, RefreshCw, Package
 } from 'lucide-react';
+import { motion } from 'motion/react';
 
-/**
- * LoRa Transmission URL — configurable via env variable.
- * Default: localhost:5000 (Python Flask backend).
- */
 const LORA_API_URL = import.meta.env.VITE_LORA_API_URL || 'http://localhost:5000';
 
-/**
- * LoRaSelector — LoRa Transmission Control Panel
- *
- * Allows ASHA workers to:
- *   1. Review all 'Red' triage waiting patients eligible for LoRa transmission
- *   2. Review inventory items eligible for LoRa transmission
- *   3. Transmit selected records to the Python backend
- */
 export function LoRaSelector() {
-  // Only fetch Red triage Waiting visits
   const redVisits = useLiveQuery(() => db.visits.where('status').equals('Waiting').and(v => v.triage_status === 'Red').toArray(), []) || [];
   const patients = useLiveQuery(() => db.patients.toArray(), []) || [];
   const inventory = useLiveQuery(() => db.inventory.toArray(), []) || [];
@@ -30,21 +18,20 @@ export function LoRaSelector() {
 
   const [selectedVisitIds, setSelectedVisitIds] = useState([]);
   const [selectedInventoryIds, setSelectedInventoryIds] = useState([]);
-  const [transmitting, setTransmitting]         = useState(false);
-  const [transmissionLog, setTransmissionLog]   = useState(() => {
+  const [transmitting, setTransmitting] = useState(false);
+  const [transmissionLog, setTransmissionLog] = useState(() => {
     const saved = localStorage.getItem('asha_lora_logs');
     if (!saved) return [];
     try {
       const parsed = JSON.parse(saved);
-      // Filter out logs older than 5 days (5 * 24 * 60 * 60 * 1000 = 432000000 ms)
       const fiveDaysAgo = Date.now() - 432000000;
       return parsed.filter(log => log.timestamp && log.timestamp > fiveDaysAgo);
     } catch {
       return [];
     }
   });
-  const [backendStatus, setBackendStatus]       = useState('unknown'); 
-  const [statusChecking, setStatusChecking]     = useState(false);
+  const [backendStatus, setBackendStatus] = useState('unknown'); 
+  const [statusChecking, setStatusChecking] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('asha_lora_logs', JSON.stringify(transmissionLog));
@@ -105,7 +92,6 @@ export function LoRaSelector() {
   };
 
   const buildInventoryPacket = (item) => {
-    // Retain 25% reserve locally, transmit 75% to gateway
     const loraQty = Math.floor(item.quantity * 0.75);
     return {
       type: 'inventory',
@@ -123,7 +109,6 @@ export function LoRaSelector() {
     }
 
     setTransmitting(true);
-    // REMOVED: setTransmissionLog([]) to preserve 5-day history
 
     const selectedVisits = redVisits.filter((v) => selectedVisitIds.includes(v.id));
     const selectedInvItems = inventory.filter((i) => selectedInventoryIds.includes(i.id));
@@ -147,7 +132,6 @@ export function LoRaSelector() {
       const triageLabel = item.packet.type === 'patient' ? item.packet.triage : 'Inventory';
       const pId = item.packet.type === 'patient' ? item.packet.visit_id : item.packet.id;
 
-      // Broadcast locally to simulate radio waves reaching the Doctor Dashboard UI in another tab
       const radioChannel = new BroadcastChannel('lora_radio');
       radioChannel.postMessage(item.packet);
       radioChannel.close();
@@ -214,193 +198,255 @@ export function LoRaSelector() {
     setSelectedInventoryIds([]);
   };
 
-  const statusColors = {
-    SUCCESS:       { bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.3)',  text: '#6ee7b7', label: '✅ TRANSMITTED' },
-    SIMULATED:     { bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)',  text: '#fde047', label: '📡 SIMULATED' },
-    BACKEND_ERROR: { bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.3)',   text: '#fca5a5', label: '❌ BACKEND ERR' },
-    REQUEST_FAILED:{ bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.3)',   text: '#fca5a5', label: '❌ FAILED' }
+  const statusStyles = {
+    SUCCESS:       { badgeBg: 'bg-[#EDF3EC]', badgeText: 'text-[#346538]', label: 'TRANSMITTED' },
+    SIMULATED:     { badgeBg: 'bg-[#FBF3DB]', badgeText: 'text-[#956400]', label: 'SIMULATED' },
+    BACKEND_ERROR: { badgeBg: 'bg-[#FDEBEC]', badgeText: 'text-[#9F2F2D]', label: 'BACKEND ERR' },
+    REQUEST_FAILED:{ badgeBg: 'bg-[#FDEBEC]', badgeText: 'text-[#9F2F2D]', label: 'FAILED' }
   };
 
   const totalSelected = selectedVisitIds.length + selectedInventoryIds.length;
 
+  const animationProps = {
+    initial: { opacity: 0, y: 12 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
+  };
+
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-
+    <div className="max-w-4xl mx-auto font-sans text-[#111111]">
       {/* ── Header ───────────────────────────────────────────────────── */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '20px', borderLeft: '4px solid #06b6d4' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-              <Radio size={24} color="#06b6d4" />
-              <h2 style={{ fontSize: '1.35rem', color: '#f8fafc', fontWeight: 700, margin: 0 }}>
-                LoRa Transmission Control
-              </h2>
-            </div>
-            <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>
-              Select Red Alert patients and Medicine Inventory to compress and broadcast over 15km LoRa RF network.
-            </p>
+      <motion.div 
+        {...animationProps}
+        className="bg-white border border-[#EAEAEA] p-8 mb-8 rounded-xl flex flex-wrap items-center justify-between gap-4"
+      >
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <Radio size={24} className="text-[#111111]" />
+            <h2 className="text-xl font-bold m-0 text-[#111111]">
+              LoRa Transmission Control
+            </h2>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <button onClick={handleCheckBackend} disabled={statusChecking}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '6px 14px', borderRadius: '20px', border: '1px solid var(--border-color)',
-                background: 'rgba(15,23,42,0.6)', cursor: 'pointer', fontSize: '0.75rem',
-                color: backendStatus === 'online' ? '#6ee7b7' : backendStatus === 'offline' ? '#fca5a5' : '#94a3b8'
-              }}>
-              {statusChecking ? <RefreshCw size={12} style={{ animation: 'spin 0.8s linear infinite' }} /> : <SignalHigh size={12} />}
-              {backendStatus === 'online' ? 'Backend Online' : backendStatus === 'offline' ? 'Backend Offline' : 'Check Backend'}
-            </button>
-          </div>
+          <p className="text-sm text-[#787774] m-0">
+            Select Red Alert patients and Medicine Inventory to compress and broadcast over 15km LoRa RF network.
+          </p>
         </div>
-      </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button 
+            onClick={handleCheckBackend} 
+            disabled={statusChecking}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md border text-sm transition-transform cursor-pointer ${
+              backendStatus === 'online' ? 'bg-[#EDF3EC] border-transparent text-[#346538]' : 
+              backendStatus === 'offline' ? 'bg-[#FDEBEC] border-transparent text-[#9F2F2D]' : 
+              'bg-[#F9F9F8] border-[#EAEAEA] text-[#111111] hover:scale-95'
+            }`}
+          >
+            {statusChecking ? (
+              <RefreshCw size={14} className="animate-spin" />
+            ) : (
+              <SignalHigh size={14} />
+            )}
+            {backendStatus === 'online' ? 'Backend Online' : backendStatus === 'offline' ? 'Backend Offline' : 'Check Backend'}
+          </button>
+        </div>
+      </motion.div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         
         {/* ── Patient Selection (Red Only) ────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ShieldAlert size={16} /> Red Alert Patients ({redVisits.length})
+        <motion.div 
+          {...animationProps} transition={{ ...animationProps.transition, delay: 0.1 }}
+          className="bg-white border border-[#EAEAEA] p-6 rounded-xl"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-bold text-[#111111] uppercase tracking-wider m-0 flex items-center gap-2">
+              <ShieldAlert size={16} className="text-[#111111]" /> Red Alert Patients ({redVisits.length})
             </h3>
-            <button onClick={handleSelectAllRed} className="btn" style={{ fontSize: '0.75rem', padding: '4px 10px', background: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' }}>
+            <button 
+              onClick={handleSelectAllRed} 
+              className="text-xs px-3 py-1.5 bg-[#F9F9F8] border border-[#EAEAEA] text-[#111111] rounded-md cursor-pointer hover:bg-[#EAEAEA] transition-colors"
+            >
               Select All
             </button>
           </div>
 
           {redVisits.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-              <CheckCircle2 size={24} color="var(--text-dim)" style={{ marginBottom: '8px' }} />
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>No Red Alert patients currently waiting.</p>
+            <div className="p-8 text-center bg-[#F9F9F8] border border-[#EAEAEA] rounded-xl">
+              <CheckCircle2 size={24} className="text-[#787774] mb-3 mx-auto" />
+              <p className="text-[#787774] text-sm m-0">No Red Alert patients currently waiting.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+            <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2">
               {redVisits.map((visit) => {
                 const patient = patientMap[visit.patient_id] || { name: 'Unknown' };
                 const isSelected = selectedVisitIds.includes(visit.id);
                 return (
-                  <div key={visit.id} onClick={() => handleToggleVisit(visit.id)}
-                    style={{
-                      padding: '12px', cursor: 'pointer', borderRadius: '8px',
-                      borderLeft: '4px solid #ef4444',
-                      background: isSelected ? 'rgba(6,182,212,0.1)' : 'rgba(15,23,42,0.6)',
-                      border: isSelected ? '1px solid rgba(6,182,212,0.5)' : '1px solid var(--border-color)',
-                      borderLeftWidth: '4px',
-                      display: 'flex', alignItems: 'center', gap: '10px'
-                    }}>
-                    <input type="checkbox" checked={isSelected} readOnly style={{ accentColor: '#06b6d4', width: '16px', height: '16px' }} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.9rem' }}>{patient.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Complaint: {visit.chief_complaint || 'N/A'}</div>
+                  <motion.div 
+                    whileHover={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
+                    whileTap={{ scale: 0.99 }}
+                    key={visit.id} 
+                    onClick={() => handleToggleVisit(visit.id)}
+                    className={`p-4 cursor-pointer rounded-xl border flex items-center gap-4 transition-colors ${
+                      isSelected 
+                        ? 'bg-[#F9F9F8] border-[#111111]' 
+                        : 'bg-white border-[#EAEAEA]'
+                    }`}
+                  >
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected} 
+                      readOnly 
+                      className="accent-[#111111] w-4 h-4 cursor-pointer" 
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-[#111111] text-sm">{patient.name}</div>
+                      <div className="text-xs text-[#787774] mt-1">Complaint: {visit.chief_complaint || 'N/A'}</div>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* ── Inventory Selection ────────────────────────────────────── */}
-        <div className="glass-panel" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Package size={16} /> Medicine Stock ({inventory.length})
+        <motion.div 
+          {...animationProps} transition={{ ...animationProps.transition, delay: 0.15 }}
+          className="bg-white border border-[#EAEAEA] p-6 rounded-xl"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-bold text-[#111111] uppercase tracking-wider m-0 flex items-center gap-2">
+              <Package size={16} className="text-[#111111]" /> Medicine Stock ({inventory.length})
             </h3>
-            <button onClick={handleSelectAllInventory} className="btn" style={{ fontSize: '0.75rem', padding: '4px 10px', background: 'rgba(16,185,129,0.12)', borderColor: 'rgba(16,185,129,0.4)', color: '#6ee7b7' }}>
+            <button 
+              onClick={handleSelectAllInventory} 
+              className="text-xs px-3 py-1.5 bg-[#F9F9F8] border border-[#EAEAEA] text-[#111111] rounded-md cursor-pointer hover:bg-[#EAEAEA] transition-colors"
+            >
               Select All
             </button>
           </div>
 
           {inventory.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-              <Package size={24} color="var(--text-dim)" style={{ marginBottom: '8px' }} />
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>No inventory items registered.</p>
+            <div className="p-8 text-center bg-[#F9F9F8] border border-[#EAEAEA] rounded-xl">
+              <Package size={24} className="text-[#787774] mb-3 mx-auto" />
+              <p className="text-[#787774] text-sm m-0">No inventory items registered.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+            <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2">
               {inventory.map((item) => {
                 const isSelected = selectedInventoryIds.includes(item.id);
                 const loraQty = Math.floor(item.quantity * 0.75);
                 return (
-                  <div key={item.id} onClick={() => handleToggleInventory(item.id)}
-                    style={{
-                      padding: '12px', cursor: 'pointer', borderRadius: '8px',
-                      borderLeft: '4px solid #10b981',
-                      background: isSelected ? 'rgba(6,182,212,0.1)' : 'rgba(15,23,42,0.6)',
-                      border: isSelected ? '1px solid rgba(6,182,212,0.5)' : '1px solid var(--border-color)',
-                      borderLeftWidth: '4px',
-                      display: 'flex', alignItems: 'center', gap: '10px'
-                    }}>
-                    <input type="checkbox" checked={isSelected} readOnly style={{ accentColor: '#06b6d4', width: '16px', height: '16px' }} />
-                    <div style={{ minWidth: 0, flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.85rem' }}>{item.item_name}</span>
-                      <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700, background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: '10px' }} title={`Total Stock: ${item.quantity}`}>
+                  <motion.div 
+                    whileHover={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
+                    whileTap={{ scale: 0.99 }}
+                    key={item.id} 
+                    onClick={() => handleToggleInventory(item.id)}
+                    className={`p-4 cursor-pointer rounded-xl border flex items-center gap-4 transition-colors ${
+                      isSelected 
+                        ? 'bg-[#F9F9F8] border-[#111111]' 
+                        : 'bg-white border-[#EAEAEA]'
+                    }`}
+                  >
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected} 
+                      readOnly 
+                      className="accent-[#111111] w-4 h-4 cursor-pointer" 
+                    />
+                    <div className="min-w-0 flex-1 flex justify-between items-center">
+                      <span className="font-semibold text-[#111111] text-sm">{item.item_name}</span>
+                      <span 
+                        className="text-[10px] uppercase tracking-wide font-bold bg-[#EAEAEA] text-[#787774] px-2 py-1 rounded-full" 
+                        title={`Total Stock: ${item.quantity}`}
+                      >
                         Tx Qty: {loraQty}
                       </span>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
 
       {/* Transmit Button */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+      <motion.div 
+        {...animationProps} transition={{ ...animationProps.transition, delay: 0.2 }}
+        className="flex flex-col sm:flex-row gap-4 mb-12"
+      >
         <button
           onClick={handleTransmit}
-          className="btn btn-primary"
           disabled={transmitting || totalSelected === 0}
-          style={{ flex: 1, padding: '14px', fontSize: '1rem', justifyContent: 'center', gap: '10px' }}
+          className={`flex-1 p-4 text-base flex justify-center items-center gap-3 rounded-md font-medium transition-transform ${
+            transmitting || totalSelected === 0 
+              ? 'bg-[#F9F9F8] text-[#787774] border border-[#EAEAEA] cursor-not-allowed' 
+              : 'bg-[#111111] text-white cursor-pointer hover:scale-95'
+          }`}
         >
           {transmitting ? (
-            <><RefreshCw size={18} style={{ animation: 'spin 0.8s linear infinite' }} /> Transmitting…</>
+            <><RefreshCw size={18} className="animate-spin" /> Transmitting…</>
           ) : (
             <><Send size={18} /> Transmit {totalSelected} Record{totalSelected !== 1 ? 's' : ''} via LoRa</>
           )}
         </button>
         {totalSelected > 0 && (
-          <button onClick={() => { setSelectedVisitIds([]); setSelectedInventoryIds([]); }} className="btn btn-secondary" style={{ padding: '0 20px' }}>
+          <button 
+            onClick={() => { setSelectedVisitIds([]); setSelectedInventoryIds([]); }} 
+            className="px-6 py-4 rounded-md bg-white border border-[#EAEAEA] text-[#111111] hover:scale-95 transition-transform cursor-pointer font-medium"
+          >
             Clear Selection
           </button>
         )}
-      </div>
+      </motion.div>
 
       {/* ── Transmission Log ──────────────────────────────────────── */}
       {transmissionLog.length > 0 && (
-        <div>
-          <h3 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' }}>
+        <motion.div 
+          {...animationProps} transition={{ ...animationProps.transition, delay: 0.3 }}
+        >
+          <h3 className="text-xs font-bold text-[#787774] uppercase tracking-widest mb-4 m-0">
             Transmission Log
           </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="flex flex-col gap-4">
             {[...transmissionLog].reverse().map((log, i) => {
-              const style = statusColors[log.status] || statusColors.SIMULATED;
+              const style = statusStyles[log.status] || statusStyles.SIMULATED;
               return (
-                <div key={i} className="glass-panel" style={{
-                  padding: '14px', background: style.bg, border: `1px solid ${style.border}`, borderRadius: '10px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.9rem' }}>{log.title}</span>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: style.text }}>{style.label}</span>
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  key={i} 
+                  className="p-5 border border-[#EAEAEA] rounded-xl bg-white"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <span className="font-bold text-[#111111] text-sm">{log.title}</span>
+                    <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-full ${style.badgeBg} ${style.badgeText}`}>
+                      {style.label}
+                    </span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: '0.72rem', color: '#94a3b8' }}>
-                    <span>Type: <strong style={{ color: '#e2e8f0' }}>{log.triage}</strong></span>
-                    <span>Size: <strong style={{ color: '#e2e8f0' }}>{log.byteSize}B</strong></span>
-                    <span>Channel: <strong style={{ color: '#e2e8f0' }}>{log.channel || '—'}</strong></span>
-                    <span>Latency: <strong style={{ color: '#e2e8f0' }}>{log.elapsed}</strong></span>
-                    {log.packetId && <span style={{ gridColumn: '1/-1' }}>Packet: <strong style={{ color: '#06b6d4', fontFamily: 'monospace' }}>{log.packetId}</strong></span>}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-2 gap-x-4 text-xs text-[#787774]">
+                    <span>Type: <strong className="text-[#111111] font-medium">{log.triage}</strong></span>
+                    <span>Size: <strong className="text-[#111111] font-medium">{log.byteSize}B</strong></span>
+                    <span>Channel: <strong className="text-[#111111] font-medium">{log.channel || '—'}</strong></span>
+                    <span>Latency: <strong className="text-[#111111] font-medium">{log.elapsed}</strong></span>
+                    {log.packetId && (
+                      <span className="col-span-2 sm:col-span-4 mt-2">
+                        Packet: <strong className="text-[#111111] font-mono font-medium">{log.packetId}</strong>
+                      </span>
+                    )}
                   </div>
                   {log.note && (
-                    <p style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '6px', marginBottom: 0, fontStyle: 'italic' }}>
+                    <p className="text-xs text-[#787774] mt-3 mb-0 italic">
                       {log.note}
                     </p>
                   )}
-                </div>
+                </motion.div>
               );
             })}
           </div>
-        </div>
+        </motion.div>
       )}
     </div>
   );

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, generateUUID } from '../../lib/db';
 import { enqueueOfflineAction } from '../../lib/syncManager';
-import { Package, AlertTriangle, Plus, Edit2, CheckCircle2, Trash2 } from 'lucide-react';
+import { Package, AlertTriangle, Plus, Edit2, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export function InventoryManager() {
   const items = useLiveQuery(() => db.inventory.toArray(), []) || [];
@@ -84,181 +85,202 @@ export function InventoryManager() {
   const lowStockCount = items.filter((item) => item.quantity <= item.min_threshold).length;
 
   return (
-    <div>
+    <div className="space-y-6 text-[#111111]">
       {/* Header Bar */}
-      <div className="glass-panel" style={{ padding: '20px 24px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Package size={26} color="#06b6d4" />
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white border border-[#EAEAEA] rounded-xl p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-[#F9F9F8] rounded-xl border border-[#EAEAEA]">
+            <Package size={24} className="text-[#111111]" />
+          </div>
           <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>
+            <h2 className="text-xl font-semibold m-0 text-[#111111]">
               PHC Stock & Medical Inventory
             </h2>
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0 }}>
+            <p className="text-sm text-[#787774] mt-1 mb-0">
               Monitor medicine supplies and record stock replenishment offline.
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="flex items-center gap-3">
           {lowStockCount > 0 && (
-            <span className="badge badge-yellow" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-              <AlertTriangle size={14} />
+            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-700 px-3 py-1.5 rounded-md text-sm font-medium">
+              <AlertTriangle size={16} />
               <span>{lowStockCount} Low Stock Alert(s)</span>
-            </span>
+            </div>
           )}
 
           <button
             onClick={() => setShowAddModal(!showAddModal)}
-            className="btn btn-primary"
-            style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+            className="bg-[#111111] text-white px-4 py-2 rounded-md text-sm font-medium hover:scale-95 transition-transform flex items-center gap-2"
           >
             <Plus size={16} />
             <span>Add Stock Item</span>
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Add Item Modal / Inline Form */}
-      {showAddModal && (
-        <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px', border: '1px solid var(--primary)' }}>
-          <h3 style={{ fontSize: '1rem', color: '#06b6d4', marginBottom: '14px' }}>Add New Medicine / Inventory Item</h3>
-          <form onSubmit={handleSaveNewItem} className="grid-layout" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Item Name *</label>
-              <input type="text" className="input-field" placeholder="e.g. Paracetamol 500mg" value={itemName} onChange={(e) => setItemName(e.target.value)} required />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Initial Quantity *</label>
-              <input type="number" className="input-field" placeholder="100" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Unit</label>
-              <input type="text" className="input-field" placeholder="tablets, sachets, kits" value={unit} onChange={(e) => setUnit(e.target.value)} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Low Stock Threshold</label>
-              <input type="number" className="input-field" placeholder="30" value={minThreshold} onChange={(e) => setMinThreshold(e.target.value)} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
-              <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: '10px' }}>Save Item</button>
-              <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
+      <AnimatePresence>
+        {showAddModal && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+            animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+            exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+            className="bg-white border border-[#EAEAEA] rounded-xl p-5 sm:p-6"
+          >
+            <h3 className="text-base font-medium text-[#111111] mb-5">Add New Medicine / Inventory Item</h3>
+            <form onSubmit={handleSaveNewItem} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+              <div>
+                <label className="block text-xs font-medium text-[#787774] mb-2">Item Name *</label>
+                <input type="text" className="bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-4 py-2.5 text-sm text-[#111111] placeholder-[#787774] focus:outline-none focus:border-[#111111] transition-colors w-full" placeholder="e.g. Paracetamol 500mg" value={itemName} onChange={(e) => setItemName(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#787774] mb-2">Initial Quantity *</label>
+                <input type="number" className="bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-4 py-2.5 text-sm text-[#111111] placeholder-[#787774] focus:outline-none focus:border-[#111111] transition-colors w-full" placeholder="100" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#787774] mb-2">Unit</label>
+                <input type="text" className="bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-4 py-2.5 text-sm text-[#111111] placeholder-[#787774] focus:outline-none focus:border-[#111111] transition-colors w-full" placeholder="tablets, sachets, kits" value={unit} onChange={(e) => setUnit(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#787774] mb-2">Low Stock Threshold</label>
+                <input type="number" className="bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-4 py-2.5 text-sm text-[#111111] placeholder-[#787774] focus:outline-none focus:border-[#111111] transition-colors w-full" placeholder="30" value={minThreshold} onChange={(e) => setMinThreshold(e.target.value)} />
+              </div>
+              <div className="flex items-center gap-3">
+                <button type="submit" className="flex-1 bg-[#111111] text-white px-4 py-2.5 rounded-md text-sm font-medium hover:scale-95 transition-transform">Save Item</button>
+                <button type="button" className="bg-white border border-[#EAEAEA] text-[#111111] px-4 py-2.5 rounded-md text-sm font-medium hover:scale-95 transition-transform" onClick={() => setShowAddModal(false)}>Cancel</button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Inventory Table */}
-      <div className="glass-panel" style={{ overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white border border-[#EAEAEA] rounded-xl overflow-hidden overflow-x-auto"
+      >
+        <table className="w-full text-left text-sm whitespace-nowrap">
           <thead>
-            <tr style={{ background: 'rgba(15, 23, 42, 0.8)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-              <th style={{ padding: '14px 20px' }}>Medicine / Supply Name</th>
-              <th style={{ padding: '14px 20px' }}>Current Stock</th>
-              <th style={{ padding: '14px 20px' }}>Threshold</th>
-              <th style={{ padding: '14px 20px' }}>Status</th>
-              <th style={{ padding: '14px 20px' }}>Last Updated</th>
-              <th style={{ padding: '14px 20px', textAlign: 'right' }}>Quick Update</th>
+            <tr className="bg-[#F9F9F8] border-b border-[#EAEAEA] text-[#787774]">
+              <th className="px-5 py-4 font-medium">Medicine / Supply Name</th>
+              <th className="px-5 py-4 font-medium">Current Stock</th>
+              <th className="px-5 py-4 font-medium">Threshold</th>
+              <th className="px-5 py-4 font-medium">Status</th>
+              <th className="px-5 py-4 font-medium">Last Updated</th>
+              <th className="px-5 py-4 font-medium text-right">Quick Update</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-[#EAEAEA]">
             {items.map((item) => {
               const isLow = item.quantity <= item.min_threshold;
               const isEditing = editingItemId === item.id;
 
               return (
-                <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: isLow ? 'rgba(245, 158, 11, 0.04)' : 'transparent' }}>
-                  
-                  <td style={{ padding: '14px 20px', fontWeight: 600, color: '#f8fafc' }}>
+                <motion.tr 
+                  layout
+                  key={item.id} 
+                  className={`transition-colors ${isLow ? 'bg-orange-50/50' : 'hover:bg-[#F9F9F8]'}`}
+                >
+                  <td className="px-5 py-4 font-medium text-[#111111]">
                     {item.item_name}
                   </td>
 
-                  <td style={{ padding: '14px 20px' }}>
+                  <td className="px-5 py-4">
                     {isEditing ? (
                       <input
                         type="number"
-                        className="input-field"
+                        className="bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-1.5 text-sm text-[#111111] focus:outline-none focus:border-[#111111] transition-colors w-24"
                         value={editQty}
                         onChange={(e) => setEditQty(e.target.value)}
-                        style={{ width: '100px', padding: '4px 8px' }}
                       />
                     ) : (
-                      <span style={{ fontSize: '1rem', fontWeight: 700, color: isLow ? '#fde047' : '#06b6d4' }}>
-                        {item.quantity} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-dim)' }}>{item.unit}</span>
-                      </span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className={`text-base font-semibold ${isLow ? 'text-orange-600' : 'text-[#111111]'}`}>
+                          {item.quantity}
+                        </span>
+                        <span className="text-xs text-[#787774]">{item.unit}</span>
+                      </div>
                     )}
                   </td>
 
-                  <td style={{ padding: '14px 20px', color: 'var(--text-muted)' }}>
+                  <td className="px-5 py-4 text-[#787774]">
                     {isEditing ? (
                       <input
                         type="number"
-                        className="input-field"
+                        className="bg-[#F9F9F8] border border-[#EAEAEA] rounded-md px-3 py-1.5 text-sm text-[#111111] focus:outline-none focus:border-[#111111] transition-colors w-20"
                         value={editThreshold}
                         onChange={(e) => setEditThreshold(e.target.value)}
-                        style={{ width: '80px', padding: '4px 8px' }}
                       />
                     ) : (
                       <>{item.min_threshold} {item.unit}</>
                     )}
                   </td>
 
-                  <td style={{ padding: '14px 20px' }}>
+                  <td className="px-5 py-4">
                     {isLow ? (
-                      <span className="badge badge-yellow">Low Stock Alert</span>
+                      <span className="inline-flex items-center gap-1.5 bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-md text-xs font-medium">
+                        Low Stock Alert
+                      </span>
                     ) : (
-                      <span className="badge badge-green">In Stock</span>
+                      <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-md text-xs font-medium">
+                        In Stock
+                      </span>
                     )}
                   </td>
 
-                  <td style={{ padding: '14px 20px', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
-                    {new Date(item.last_updated).toLocaleDateString()} {new Date(item.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <td className="px-5 py-4 text-[#787774] text-xs">
+                    <div>{new Date(item.last_updated).toLocaleDateString()}</div>
+                    <div className="mt-0.5">{new Date(item.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                   </td>
 
-                  <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                  <td className="px-5 py-4 text-right">
                     {isEditing ? (
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                      <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={() => handleUpdateItem(item.id)}
-                          className="btn btn-primary"
-                          style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                          className="bg-[#111111] text-white px-3 py-1.5 rounded-md text-xs font-medium hover:scale-95 transition-transform"
                         >
                           Save
                         </button>
                         <button
                           onClick={() => setEditingItemId(null)}
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                          className="bg-white border border-[#EAEAEA] text-[#111111] px-3 py-1.5 rounded-md text-xs font-medium hover:scale-95 transition-transform"
                         >
                           Cancel
                         </button>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                      <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={() => { setEditingItemId(item.id); setEditQty(item.quantity); setEditThreshold(item.min_threshold); }}
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                          className="bg-white border border-[#EAEAEA] text-[#111111] px-3 py-1.5 rounded-md text-xs font-medium hover:scale-95 transition-transform flex items-center gap-1.5"
                         >
                           <Edit2 size={13} />
                           <span>Adjust</span>
                         </button>
                         <button
                           onClick={() => handleDeleteItem(item.id)}
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                          className="bg-white hover:bg-red-50 text-[#111111] hover:text-red-600 border border-[#EAEAEA] hover:border-red-200 px-2 py-1.5 rounded-md hover:scale-95 transition-all"
+                          aria-label="Delete item"
                         >
-                          <Trash2 size={13} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     )}
                   </td>
-
-                </tr>
+                </motion.tr>
               );
             })}
           </tbody>
         </table>
-      </div>
+      </motion.div>
     </div>
   );
 }

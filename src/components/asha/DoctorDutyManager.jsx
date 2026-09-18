@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, generateUUID } from '../../lib/db';
 import { enqueueOfflineAction } from '../../lib/syncManager';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Stethoscope, UserCheck, UserX, Plus, Save, Trash2, X, ToggleLeft, ToggleRight
 } from 'lucide-react';
@@ -20,6 +21,64 @@ const SPECIALTIES = [
   'Dentist',
   'Other'
 ];
+
+const DoctorCard = ({ doctor, onToggleDuty, onRemoveDoctor }) => {
+  const onDutyStatus = doctor.is_on_duty;
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#EAEAEA] bg-white p-4 transition-shadow hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+    >
+      <div className="flex items-center gap-3.5">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+          onDutyStatus ? 'bg-[#EDF3EC]' : 'bg-[#F9F9F8]'
+        }`}>
+          <Stethoscope className={`h-5 w-5 ${onDutyStatus ? 'text-[#346538]' : 'text-[#787774]'}`} />
+        </div>
+        <div>
+          <div className="font-medium text-[#111111]">{doctor.full_name}</div>
+          <div className="mt-0.5 text-sm text-[#787774]">
+            {doctor.specialty}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.05em] ${
+          onDutyStatus 
+            ? 'bg-[#EDF3EC] text-[#346538]' 
+            : 'bg-[#F9F9F8] text-[#787774]'
+        }`}>
+          {onDutyStatus ? 'On Duty' : 'Off Duty'}
+        </span>
+
+        <button
+          onClick={() => onToggleDuty(doctor)}
+          title={onDutyStatus ? 'Mark as Off Duty' : 'Mark as On Duty'}
+          className={`flex items-center justify-center rounded-md p-1.5 transition-transform hover:scale-95 ${
+            onDutyStatus 
+              ? 'text-[#346538]' 
+              : 'text-[#787774]'
+          }`}
+        >
+          {onDutyStatus ? <ToggleRight className="h-6 w-6" /> : <ToggleLeft className="h-6 w-6" />}
+        </button>
+
+        <button
+          onClick={() => onRemoveDoctor(doctor.id)}
+          title="Remove from roster"
+          className="flex items-center justify-center rounded-md p-1.5 text-[#787774] transition-transform hover:scale-95 hover:text-[#9F2F2D]"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </motion.div>
+  );
+};
 
 /**
  * DoctorDutyManager (ASHA Dashboard — Duty Roster Tab)
@@ -90,193 +149,190 @@ export function DoctorDutyManager() {
     }
   };
 
-  const DoctorCard = ({ doctor }) => {
-    const onDutyStatus = doctor.is_on_duty;
-    return (
-      <div
-        className="glass-panel"
-        style={{
-          padding: '16px 20px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: '16px', flexWrap: 'wrap',
-          borderLeft: `4px solid ${onDutyStatus ? '#10b981' : '#475569'}`
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{
-            width: '44px', height: '44px', borderRadius: '12px',
-            background: onDutyStatus ? 'rgba(16,185,129,0.15)' : 'rgba(71,85,105,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-          }}>
-            <Stethoscope size={22} color={onDutyStatus ? '#10b981' : '#64748b'} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, color: '#f8fafc', fontSize: '1rem' }}>{doctor.full_name}</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-              {doctor.specialty}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{
-            fontSize: '0.72rem', fontWeight: 600, padding: '3px 10px', borderRadius: '20px',
-            background: onDutyStatus ? 'rgba(16,185,129,0.15)' : 'rgba(71,85,105,0.2)',
-            color: onDutyStatus ? '#6ee7b7' : '#94a3b8',
-            border: `1px solid ${onDutyStatus ? 'rgba(16,185,129,0.3)' : 'rgba(71,85,105,0.4)'}`
-          }}>
-            {onDutyStatus ? '● ON DUTY' : '○ OFF DUTY'}
-          </span>
-
-          <button
-            onClick={() => handleToggleDuty(doctor)}
-            title={onDutyStatus ? 'Mark as Off Duty' : 'Mark as On Duty'}
-            style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              padding: '4px', borderRadius: '8px', color: onDutyStatus ? '#10b981' : '#64748b',
-              display: 'flex', alignItems: 'center'
-            }}
-          >
-            {onDutyStatus ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
-          </button>
-
-          <button
-            onClick={() => handleRemoveDoctor(doctor.id)}
-            title="Remove from roster"
-            style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              padding: '4px', borderRadius: '8px', color: '#64748b',
-              display: 'flex', alignItems: 'center'
-            }}
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-
+    <div className="mx-auto max-w-3xl space-y-8">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EAEAEA] pb-4">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-            <Stethoscope size={24} color="#06b6d4" />
-            <h2 style={{ fontSize: '1.35rem', color: '#f8fafc', fontWeight: 700, margin: 0 }}>
+          <div className="mb-2 flex items-center gap-3">
+            <Stethoscope className="h-6 w-6 text-[#111111]" />
+            <h2 className="m-0 text-2xl font-medium tracking-tight text-[#111111]">
               Doctor Duty Roster
             </h2>
           </div>
-          <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>
+          <p className="m-0 text-base text-[#787774]">
             Manage which doctors are currently on duty. Only on-duty doctors appear in the triage specialist assignment.
           </p>
         </div>
         <button
           onClick={() => setShowAddForm(!showAddForm)}
-          className="btn btn-primary"
-          style={{ padding: '9px 18px', fontSize: '0.85rem' }}
+          className="inline-flex items-center gap-2 rounded-md bg-[#111111] px-4 py-2 text-sm font-medium text-white transition-transform hover:scale-95 active:scale-95"
         >
-          {showAddForm ? <X size={16} /> : <Plus size={16} />}
+          {showAddForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           {showAddForm ? 'Cancel' : 'Add Doctor'}
         </button>
       </div>
 
       {/* Add Doctor Form */}
-      {showAddForm && (
-        <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px', border: '1px solid rgba(6,182,212,0.3)' }}>
-          <h3 style={{ fontSize: '0.95rem', color: '#06b6d4', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={16} /> Add New Doctor to PHC Roster
-          </h3>
-          <form onSubmit={handleAddDoctor}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="Dr. Full Name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                  Specialty *
-                </label>
-                <select
-                  className="input-field"
-                  value={newSpecialty}
-                  onChange={(e) => setNewSpecialty(e.target.value)}
-                >
-                  {SPECIALTIES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div className="mb-2 rounded-xl border border-[#EAEAEA] bg-[#F9F9F8] p-6">
+              <h3 className="mb-6 flex items-center gap-2 text-sm font-medium text-[#111111]">
+                <Plus className="h-4 w-4" /> Add New Doctor to PHC Roster
+              </h3>
+              <form onSubmit={handleAddDoctor}>
+                <div className="mb-6 grid gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#111111]">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-[#EAEAEA] bg-white px-3 py-2 text-sm text-[#111111] placeholder-[#787774] focus:border-[#111111] focus:outline-none focus:ring-1 focus:ring-[#111111]"
+                      placeholder="Dr. Full Name"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#111111]">
+                      Specialty *
+                    </label>
+                    <select
+                      className="w-full rounded-md border border-[#EAEAEA] bg-white px-3 py-2 text-sm text-[#111111] focus:border-[#111111] focus:outline-none focus:ring-1 focus:ring-[#111111]"
+                      value={newSpecialty}
+                      onChange={(e) => setNewSpecialty(e.target.value)}
+                    >
+                      {SPECIALTIES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-4">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-md border border-[#EAEAEA] bg-white px-4 py-2 text-sm font-medium text-[#111111] transition-transform hover:scale-95"
+                    onClick={() => setShowAddForm(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-2 rounded-md bg-[#111111] px-4 py-2 text-sm font-medium text-white transition-transform hover:scale-95 disabled:opacity-50"
+                    disabled={isSaving}
+                  >
+                    <Save className="h-4 w-4" />
+                    {isSaving ? 'Adding…' : 'Add & Set On Duty'}
+                  </button>
+                </div>
+              </form>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={isSaving} style={{ padding: '8px 20px' }}>
-                <Save size={15} />
-                {isSaving ? 'Adding…' : 'Add & Set On Duty'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Stats Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '24px' }}>
-        <div className="glass-panel" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', borderLeft: '4px solid #10b981' }}>
-          <UserCheck size={22} color="#10b981" />
-          <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#6ee7b7' }}>{onDuty.length}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Doctors On Duty</div>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <motion.div 
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+          className="flex items-center gap-4 rounded-xl border border-[#EAEAEA] bg-white p-6"
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EDF3EC]">
+            <UserCheck className="h-6 w-6 text-[#346538]" />
           </div>
-        </div>
-        <div className="glass-panel" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', borderLeft: '4px solid #475569' }}>
-          <UserX size={22} color="#64748b" />
           <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#94a3b8' }}>{offDuty.length}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Doctors Off Duty</div>
+            <div className="text-2xl font-medium text-[#111111]">{onDuty.length}</div>
+            <div className="text-sm text-[#787774]">Doctors On Duty</div>
           </div>
-        </div>
+        </motion.div>
+        <motion.div 
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
+          className="flex items-center gap-4 rounded-xl border border-[#EAEAEA] bg-white p-6"
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F9F9F8]">
+            <UserX className="h-6 w-6 text-[#787774]" />
+          </div>
+          <div>
+            <div className="text-2xl font-medium text-[#111111]">{offDuty.length}</div>
+            <div className="text-sm text-[#787774]">Doctors Off Duty</div>
+          </div>
+        </motion.div>
       </div>
 
       {/* On Duty Section */}
       {onDuty.length > 0 && (
-        <div style={{ marginBottom: '28px' }}>
-          <h3 style={{ fontSize: '0.8rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+        >
+          <h3 className="mb-4 text-[11px] font-medium uppercase tracking-[0.05em] text-[#787774]">
             Currently On Duty
           </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {onDuty.map((d) => <DoctorCard key={d.id} doctor={d} />)}
+          <div className="flex flex-col gap-3">
+            <AnimatePresence>
+              {onDuty.map((d) => (
+                <DoctorCard 
+                  key={d.id} 
+                  doctor={d} 
+                  onToggleDuty={handleToggleDuty} 
+                  onRemoveDoctor={handleRemoveDoctor} 
+                />
+              ))}
+            </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Off Duty Section */}
       {offDuty.length > 0 && (
-        <div>
-          <h3 style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
+        >
+          <h3 className="mb-4 text-[11px] font-medium uppercase tracking-[0.05em] text-[#787774]">
             Off Duty
           </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {offDuty.map((d) => <DoctorCard key={d.id} doctor={d} />)}
+          <div className="flex flex-col gap-3">
+            <AnimatePresence>
+              {offDuty.map((d) => (
+                <DoctorCard 
+                  key={d.id} 
+                  doctor={d} 
+                  onToggleDuty={handleToggleDuty} 
+                  onRemoveDoctor={handleRemoveDoctor} 
+                />
+              ))}
+            </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {doctors.length === 0 && (
-        <div className="glass-panel" style={{ padding: '48px', textAlign: 'center' }}>
-          <Stethoscope size={40} color="var(--text-dim)" style={{ marginBottom: '12px' }} />
-          <p style={{ color: 'var(--text-muted)' }}>No doctors registered at this PHC yet.</p>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: '4px' }}>Click "Add Doctor" to register the first doctor.</p>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="rounded-xl border border-[#EAEAEA] bg-white p-16 text-center"
+        >
+          <Stethoscope className="mx-auto mb-4 h-12 w-12 text-[#787774]" />
+          <p className="text-base font-medium text-[#111111]">No doctors registered at this PHC yet.</p>
+          <p className="mt-2 text-sm text-[#787774]">Click "Add Doctor" to register the first doctor.</p>
+        </motion.div>
       )}
     </div>
   );

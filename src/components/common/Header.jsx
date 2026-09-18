@@ -1,8 +1,9 @@
 import React from 'react';
 import {
   Users, QrCode, Radio, Package, Stethoscope, UserCog,
-  Wifi, WifiOff, RefreshCw, LogOut, Activity
+  Wifi, WifiOff, RefreshCw, LogOut
 } from 'lucide-react';
+import { motion } from 'motion/react';
 
 const TABS = [
   { key: 'queue',     label: 'Smart Queue',   icon: <Users size={16} /> },
@@ -12,108 +13,91 @@ const TABS = [
   { key: 'duty',      label: 'Duty Roster',   icon: <UserCog size={16} /> }
 ];
 
-/**
- * Header — ASHA Dashboard navigation bar
- *
- * Props:
- *   activeTab    — currently active tab key
- *   setActiveTab — tab setter
- *   isOnline     — connectivity status
- *   toggleOnline — toggle online/offline simulation
- *   onManualSync — trigger Supabase sync
- *   onSignOut    — sign out handler
- */
 export function Header({ activeTab, setActiveTab, isOnline, toggleOnline, onManualSync, onSignOut }) {
   return (
-    <header className="glass-panel" style={{ borderRadius: '0 0 16px 16px', marginBottom: '24px', position: 'sticky', top: 0, zIndex: 100 }}>
-      <div className="container" style={{ padding: '12px 20px' }}>
-
-        {/* Top row: branding + connectivity + actions */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
-
+    <header className="sticky top-0 z-50 w-full bg-white/90 backdrop-blur-xl border-b border-[#EAEAEA] mb-12">
+      <div className="max-w-5xl mx-auto px-6">
+        
+        {/* Top row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6">
+          
           {/* Branding */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '40px', height: '40px', borderRadius: '10px',
-              background: 'linear-gradient(135deg, #0d9488 0%, #06b6d4 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 0 14px rgba(13,148,136,0.4)', flexShrink: 0
-            }}>
-              <Stethoscope size={22} color="#ffffff" />
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 border border-[#EAEAEA] rounded-md flex items-center justify-center shrink-0">
+              <Stethoscope size={20} className="text-[#111111]" />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', margin: 0 }}>
-                  ArogyaSync <span style={{ color: '#06b6d4', fontSize: '0.85rem', fontWeight: 600 }}>ASHA</span>
-                </h1>
-                <span className="badge badge-green" style={{ fontSize: '0.62rem' }}>PHC Node</span>
+              <div className="flex items-center gap-3">
+                <h1 className="font-serif text-2xl font-medium tracking-tight text-[#111111] m-0 leading-none">ArogyaSync</h1>
+                <span className="px-2 py-0.5 rounded-full bg-[#F7F6F3] text-[#787774] border border-[#EAEAEA] text-[10px] font-bold uppercase tracking-widest">
+                  ASHA Node
+                </span>
               </div>
-              <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: 0 }}>
-                Offline-First Patient Intake & Triage
-              </p>
+              <p className="text-sm text-[#787774] mt-1 leading-none">Offline-First Patient Intake & Triage</p>
             </div>
           </div>
 
-          {/* Connectivity + Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-
-            {/* Online/Offline badge (clickable for demo simulation) */}
+          {/* Controls */}
+          <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:pb-0">
             <button
               onClick={toggleOnline}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '6px 14px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '0.78rem',
-                background: isOnline ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.15)',
-                color: isOnline ? '#6ee7b7' : '#fca5a5'
-              }}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors shrink-0 ${
+                isOnline 
+                  ? 'bg-[#EDF3EC] border-[#EDF3EC] text-[#346538] hover:bg-[#E3EFE2]' 
+                  : 'bg-[#FDEBEC] border-[#FDEBEC] text-[#9F2F2D] hover:bg-[#FADBDC]'
+              }`}
             >
-              {isOnline ? <Wifi size={13} /> : <WifiOff size={13} />}
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOnline ? '#10b981' : '#ef4444', display: 'inline-block' }} />
+              {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-[#346538]' : 'bg-[#9F2F2D]'} animate-pulse`} />
               {isOnline ? 'Online' : 'Offline'}
             </button>
 
-            {/* Manual Sync */}
             {isOnline && (
-              <button onClick={onManualSync} className="btn btn-secondary"
-                style={{ padding: '5px 12px', fontSize: '0.78rem', gap: '6px' }}>
-                <RefreshCw size={13} /> Sync Now
+              <button 
+                onClick={onManualSync} 
+                className="btn-minimal-outline flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+              >
+                <RefreshCw size={14} /> 
+                <span>Sync</span>
               </button>
             )}
 
-            {/* Sign Out */}
             {onSignOut && (
-              <button onClick={onSignOut} className="btn btn-secondary"
-                style={{ padding: '5px 12px', fontSize: '0.78rem', gap: '6px', color: '#94a3b8' }}>
-                <LogOut size={13} /> Sign Out
+              <button 
+                onClick={onSignOut} 
+                className="btn-minimal-outline flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[#787774] hover:text-[#111111]"
+              >
+                <LogOut size={14} />
               </button>
             )}
           </div>
         </div>
 
-        {/* Tab navigation */}
-        <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px' }}>
-          {TABS.map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                fontSize: '0.8rem', fontWeight: activeTab === key ? 700 : 500,
-                whiteSpace: 'nowrap', transition: 'all 0.2s ease',
-                background: activeTab === key
-                  ? 'linear-gradient(135deg, rgba(13,148,136,0.35) 0%, rgba(6,182,212,0.25) 100%)'
-                  : 'transparent',
-                color: activeTab === key ? '#5eead4' : '#64748b',
-                borderBottom: activeTab === key ? '2px solid #06b6d4' : '2px solid transparent'
-              }}
-            >
-              {icon}
-              {label}
-            </button>
-          ))}
+        {/* Tabs */}
+        <div className="flex items-center gap-4 overflow-x-auto no-scrollbar pb-px">
+          {TABS.map(({ key, label, icon }) => {
+            const isActive = activeTab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`relative flex items-center gap-2 pb-4 text-sm font-medium transition-colors shrink-0 ${
+                  isActive ? 'text-[#111111]' : 'text-[#787774] hover:text-[#111111]'
+                }`}
+              >
+                {icon}
+                {label}
+                {isActive && (
+                  <motion.div 
+                    layoutId="header-active-tab"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#111111]"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
-
       </div>
     </header>
   );

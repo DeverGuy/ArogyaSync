@@ -7,6 +7,7 @@ import {
   User, Activity, FileText, History, ChevronRight, CheckCircle, Save,
   Stethoscope, Wifi, WifiOff, Users, X, BookOpen, ClipboardList, Radio
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const TRIAGE_PRIORITY = { Red: 1, Yellow: 2, Green: 3 };
 
@@ -147,59 +148,57 @@ export default function DoctorDashboard() {
   };
 
   const triageBadge = (level) => {
-    if (level === 'Red') return 'badge badge-red';
-    if (level === 'Yellow') return 'badge badge-yellow';
-    return 'badge badge-green';
+    if (level === 'Red') return 'bg-[#FDEBEC] border-[#FDEBEC] text-[#9F2F2D]';
+    if (level === 'Yellow') return 'bg-[#FBF3DB] border-[#FBF3DB] text-[#956400]';
+    return 'bg-[#EDF3EC] border-[#EDF3EC] text-[#346538]';
   };
   const triageBorder = (level) => {
-    if (level === 'Red') return '#ef4444';
-    if (level === 'Yellow') return '#f59e0b';
-    return '#10b981';
+    if (level === 'Red') return 'border-[#9F2F2D]';
+    if (level === 'Yellow') return 'border-[#956400]';
+    return 'border-[#346538]';
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-main)', color: '#f8fafc', paddingBottom: '40px' }}>
+    <div className="min-h-[100dvh] bg-[#F7F6F3] text-[#111111] pb-10">
       
-      {/* ── HEADER ── */}
-      <header className="glass-panel" style={{ borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none', padding: '16px 24px', marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, var(--primary) 0%, #0891b2 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Stethoscope size={24} color="#fff" />
+      {/* HEADER */}
+      <header className="sticky top-0 z-50 w-full bg-white border-b border-[#EAEAEA] mb-12 py-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+        <div className="max-w-[1400px] mx-auto px-8 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 border border-[#EAEAEA] rounded-md flex items-center justify-center bg-[#FBFBFA]">
+              <Stethoscope size={20} className="text-[#111111]" />
+            </div>
+            <div>
+              <h1 className="font-serif text-2xl font-medium tracking-tight text-[#111111] m-0 leading-none">Doctor Dashboard</h1>
+              <p className="text-sm text-[#787774] mt-1 leading-none">Consultation & Records System</p>
+            </div>
           </div>
-          <div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#f8fafc', letterSpacing: '-0.02em' }}>Doctor Dashboard</h1>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '2px 0 0' }}>Consultation & Records System</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', background: 'rgba(15,23,42,0.5)', borderRadius: '20px', border: '1px solid var(--border-color)', fontSize: '0.8rem', color: isOnline ? '#10b981' : '#ef4444' }}>
-            {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-            <span style={{ fontWeight: 600 }}>{isOnline ? 'Online Synced' : 'Offline Mode'}</span>
+          <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold uppercase tracking-widest ${isOnline ? 'bg-[#EDF3EC] border-[#EDF3EC] text-[#346538]' : 'bg-[#FDEBEC] border-[#FDEBEC] text-[#9F2F2D]'}`}>
+              {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+              <span>{isOnline ? 'Online Synced' : 'Offline Mode'}</span>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* ── MAIN LAYOUT ── */}
-      <main className="container" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'flex-start' }}>
+      {/* MAIN LAYOUT */}
+      <main className="max-w-[1400px] mx-auto px-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 items-start">
         
-        {/* ── LEFT PANE ── */}
-        <div className="glass-panel" style={{ padding: 0, overflow: 'hidden', minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
+        {/* LEFT PANE */}
+        <div className="bg-white border border-[#EAEAEA] rounded-xl overflow-hidden min-h-[600px] flex flex-col shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
           
-          {/* Tab Navigation (Always Visible) */}
-          <div style={{ display: 'flex', gap: '8px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', background: 'rgba(15,23,42,0.6)' }}>
+          {/* Tabs */}
+          <div className="flex gap-4 p-4 border-b border-[#EAEAEA] bg-[#FBFBFA] overflow-x-auto no-scrollbar">
             {[
               { key: 'current', label: 'Current Consultation', icon: <Stethoscope size={14} /> },
               { key: 'history', label: `History (${visitHistory.length})`, icon: <History size={14} /> },
               { key: 'lora',    label: `Radio Receiver (${radioPackets.length})`, icon: <Radio size={14} /> }
             ].map(({ key, label, icon }) => (
               <button key={key} onClick={() => setActiveTab(key)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                  background: activeTab === key ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                  color: activeTab === key ? '#fff' : 'var(--text-muted)',
-                  fontWeight: 600, fontSize: '0.85rem'
-                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                  activeTab === key ? 'bg-[#111111] text-white' : 'text-[#787774] hover:bg-[#F7F6F3] hover:text-[#111111]'
+                }`}
               >
                 {icon} {label}
               </button>
@@ -207,210 +206,269 @@ export default function DoctorDashboard() {
           </div>
 
           {/* Content Area */}
-          <div style={{ flex: 1 }}>
-            {activeTab === 'lora' ? (
-              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h2 style={{ fontSize: '0.9rem', color: '#10b981', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Radio size={16} color="#10b981" /> Incoming LoRa Transmissions
-                  </h2>
-                  <button onClick={() => { setRadioPackets([]); localStorage.removeItem('lora_logs'); }} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>
-                    Clear Log
-                  </button>
-                </div>
-
-                <div style={{ flex: 1, background: '#020617', borderRadius: '12px', border: '1px solid #1e293b', padding: '16px', overflowY: 'auto', maxHeight: '500px', fontFamily: 'monospace' }}>
-                  {radioPackets.length === 0 ? (
-                    <div style={{ color: '#334155', textAlign: 'center', padding: '40px 0' }}>
-                      <Radio size={48} style={{ opacity: 0.5, marginBottom: '16px' }} />
-                      <p style={{ margin: 0 }}>Listening on 868 MHz...</p>
-                      <p style={{ fontSize: '0.75rem', marginTop: '8px' }}>Waiting for ASHA transmission.</p>
+          <div className="flex-1 bg-white">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="h-full flex flex-col"
+              >
+                {activeTab === 'lora' ? (
+                  <div className="p-8 flex flex-col h-full">
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-sm font-bold text-[#111111] uppercase tracking-widest flex items-center gap-2">
+                        <Radio size={16} /> Incoming LoRa Transmissions
+                      </h2>
+                      <button 
+                        onClick={() => { setRadioPackets([]); localStorage.removeItem('lora_logs'); }}
+                        className="btn-minimal-outline text-xs"
+                      >
+                        Clear Log
+                      </button>
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {radioPackets.map((pkt, idx) => (
-                        <div key={idx} style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#10b981', fontSize: '0.75rem' }}>
-                            <span>[RX] {new Date(pkt._receivedAt).toLocaleTimeString()}</span>
-                            <span>Signal: -84 dBm</span>
-                          </div>
-                          <pre style={{ margin: 0, color: '#f8fafc', fontSize: '0.8rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                            {JSON.stringify(pkt, null, 2)}
-                          </pre>
+
+                    <div className="flex-1 bg-[#FBFBFA] border border-[#EAEAEA] rounded-md p-6 overflow-y-auto max-h-[500px] font-mono text-sm shadow-inner">
+                      {radioPackets.length === 0 ? (
+                        <div className="text-[#787774] text-center py-16 flex flex-col items-center">
+                          <Radio size={32} className="opacity-50 mb-4" />
+                          <p>Listening on 868 MHz...</p>
+                          <p className="mt-2 text-xs">Waiting for ASHA transmission.</p>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (!selectedVisit || !currentPatient) ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', color: 'var(--text-dim)' }}>
-                <Users size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
-                <h3>No Active Patient</h3>
-                <p>Select a patient from the queue to begin consultation.</p>
-              </div>
-            ) : (
-              <>
-                {activeTab === 'current' && (
-                  <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                    {selectedVisit.status === 'In Consultation' && (
-                      <div style={{ padding: '16px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <h3 style={{ margin: '0 0 4px', color: '#60a5fa', fontSize: '1rem' }}>Patient is Waiting</h3>
-                          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Review the details below and start the consultation when ready.</p>
-                        </div>
-                        <button className="btn btn-primary" onClick={handleStartConsultation} disabled={isSaving} style={{ background: '#3b82f6', padding: '12px 24px', fontWeight: 'bold' }}>
-                          Start Consultation
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="glass-panel" style={{ padding: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <User size={16} color="#06b6d4" /> Patient Identity
-                        </h2>
-                        <span className={triageBadge(selectedVisit.triage_status)}>
-                          Triage: {selectedVisit.triage_status}
-                        </span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        {[{ label: 'Full Name', name: 'name' }, { label: 'Blood Group', name: 'blood_group' }, { label: 'Gender', name: 'gender' }, { label: 'Phone', name: 'phone' }].map(({ label, name }) => (
-                          <div key={name}>
-                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</label>
-                            <input type="text" className="input-field" name={name} value={editedPatient[name] || ''} onChange={handlePatientField} />
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-                        <button className="btn btn-secondary" onClick={handleSavePatientInfo} disabled={isSaving}>
-                          <Save size={14} /> {isSaving ? 'Saving...' : 'Save Info'}
-                        </button>
-                      </div>
-                      {selectedVisit.survival_info && (
-                        <div style={{ marginTop: '16px', padding: '12px', background: 'var(--triage-red-bg)', border: '1px solid var(--triage-red-border)', borderRadius: '8px' }}>
-                          <h4 style={{ color: 'var(--triage-red-text)', margin: '0 0 6px', fontSize: '0.85rem' }}>Critical ASHA Note:</h4>
-                          <p style={{ color: '#fff', margin: 0, fontSize: '0.9rem' }}>{selectedVisit.survival_info}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="glass-panel" style={{ padding: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Activity size={16} color="#10b981" /> Current Vitals
-                        </h2>
-                        <button className="btn btn-primary" onClick={handleSaveVitals} disabled={isSaving} style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-                          <Save size={14} /> {isSaving ? 'Saving...' : 'Update Vitals'}
-                        </button>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-                        {[{ label: 'Heart Rate', name: 'heartRate' }, { label: 'BP', name: 'bp' }, { label: 'SpO2 (%)', name: 'spo2' }, { label: 'Temp (°F)', name: 'temp' }].map(({ label, name }) => (
-                          <div key={name}>
-                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</label>
-                            <input type="text" className="input-field" name={name} value={editedVitals[name] || ''} onChange={handleVitalField} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="glass-panel" style={{ padding: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <BookOpen size={16} color="#3b82f6" /> Attached Documents ({patientDocs.length})
-                        </h2>
-                      </div>
-                      {patientDocs.length === 0 ? (
-                        <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', margin: 0 }}>No documents uploaded by ASHA.</p>
                       ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                          {patientDocs.map(doc => (
-                            <button key={doc.id} onClick={() => setViewingDoc(doc)}
-                              style={{ padding: '12px', background: 'rgba(15,23,42,0.5)', border: '1px solid var(--border-color)', borderRadius: '8px', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '6px' }}
-                            >
-                              <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#06b6d4', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <FileText size={14} /> {doc.document_type}
-                              </span>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                {new Date(doc.uploaded_at).toLocaleString()}
-                              </span>
-                            </button>
+                        <div className="flex flex-col gap-4">
+                          {radioPackets.map((pkt, idx) => (
+                            <div key={idx} className="p-4 bg-white border border-[#EAEAEA] rounded-md shadow-sm">
+                              <div className="flex justify-between text-xs text-[#787774] font-bold mb-3 uppercase tracking-widest border-b border-[#EAEAEA] pb-2">
+                                <span>[RX] {new Date(pkt._receivedAt).toLocaleTimeString()}</span>
+                                <span>Signal: -84 dBm</span>
+                              </div>
+                              <pre className="text-[#111111] whitespace-pre-wrap break-all text-xs">
+                                {JSON.stringify(pkt, null, 2)}
+                              </pre>
+                            </div>
                           ))}
                         </div>
                       )}
                     </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', gap: '12px' }}>
-                      {selectedVisit.status === 'In Progress' && (
-                        <button className="btn btn-primary" onClick={handleCompleteConsultation} disabled={isSaving} style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', padding: '12px 24px' }}>
-                          <CheckCircle size={18} /> Mark Consultation Complete
-                        </button>
-                      )}
-                    </div>
                   </div>
-                )}
-
-                {activeTab === 'history' && (
-                  <div style={{ padding: '24px' }}>
-                    <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '16px' }}>
-                      Past Records — {currentPatient.name}
-                    </h2>
-                    {visitHistory.length === 0 ? (
-                      <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '32px' }}>No previous visits recorded.</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {visitHistory.map(v => (
-                          <div key={v.id} className="glass-panel" style={{ padding: '16px', borderLeft: `4px solid ${triageBorder(v.triage_status)}` }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                              <strong style={{ color: '#fff' }}>{new Date(v.created_at).toLocaleDateString()}</strong>
-                              <span className={triageBadge(v.triage_status)}>{v.triage_status}</span>
+                ) : (!selectedVisit || !currentPatient) ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] text-[#787774]">
+                    <Users size={48} className="mb-4 opacity-50" />
+                    <h3 className="text-lg font-medium text-[#111111]">No Active Patient</h3>
+                    <p className="text-sm">Select a patient from the queue to begin consultation.</p>
+                  </div>
+                ) : (
+                  <>
+                    {activeTab === 'current' && (
+                      <div className="p-8 flex flex-col gap-8">
+                        {selectedVisit.status === 'In Consultation' && (
+                          <div className="p-5 bg-[#F9F9F8] border border-[#EAEAEA] rounded-xl flex justify-between items-center">
+                            <div>
+                              <h3 className="text-[#111111] font-bold mb-1">Patient is Waiting</h3>
+                              <p className="text-[#787774] text-sm">Review the details below and start the consultation when ready.</p>
                             </div>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                              Complaint: <span style={{ color: '#fff' }}>{v.chief_complaint || 'None specified'}</span>
-                            </div>
+                            <button 
+                              onClick={handleStartConsultation} 
+                              disabled={isSaving}
+                              className="btn-minimal"
+                            >
+                              Start Consultation
+                            </button>
                           </div>
-                        ))}
+                        )}
+
+                        <div className="bento-card relative overflow-hidden">
+                          <div className="flex justify-between items-center mb-8 border-b border-[#EAEAEA] pb-4">
+                            <h2 className="text-sm font-bold text-[#111111] uppercase tracking-widest flex items-center gap-2">
+                              <User size={16} className="text-[#787774]" /> Patient Identity
+                            </h2>
+                            <span className={`px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest ${triageBadge(selectedVisit.triage_status)}`}>
+                              Triage: {selectedVisit.triage_status}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {[
+                              { label: 'Full Name', name: 'name' }, 
+                              { label: 'Blood Group', name: 'blood_group' }, 
+                              { label: 'Gender', name: 'gender' }, 
+                              { label: 'Phone', name: 'phone' }
+                            ].map(({ label, name }) => (
+                              <div key={name} className="space-y-2">
+                                <label className="block text-xs font-bold text-[#787774] uppercase tracking-widest">{label}</label>
+                                <input 
+                                  type="text" 
+                                  name={name} 
+                                  value={editedPatient[name] || ''} 
+                                  onChange={handlePatientField}
+                                  className="minimal-input"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          
+                          <div className="flex justify-end mt-8 border-t border-[#EAEAEA] pt-6">
+                            <button 
+                              onClick={handleSavePatientInfo} 
+                              disabled={isSaving}
+                              className="btn-minimal flex items-center gap-2"
+                            >
+                              <Save size={14} /> {isSaving ? 'Saving...' : 'Save Info'}
+                            </button>
+                          </div>
+
+                          {selectedVisit.survival_info && (
+                            <div className="mt-6 p-5 bg-[#FDEBEC] border border-[#FDEBEC] rounded-md">
+                              <h4 className="text-[#9F2F2D] font-bold text-xs uppercase tracking-widest mb-2">Critical ASHA Note</h4>
+                              <p className="text-[#9F2F2D] text-sm leading-relaxed">{selectedVisit.survival_info}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="bento-card">
+                          <div className="flex justify-between items-center mb-8 border-b border-[#EAEAEA] pb-4">
+                            <h2 className="text-sm font-bold text-[#111111] uppercase tracking-widest flex items-center gap-2">
+                              <Activity size={16} className="text-[#787774]" /> Current Vitals
+                            </h2>
+                            <button 
+                              onClick={handleSaveVitals} 
+                              disabled={isSaving}
+                              className="btn-minimal-outline flex items-center gap-2 text-xs py-1.5"
+                            >
+                              <Save size={14} /> {isSaving ? 'Saving...' : 'Update Vitals'}
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            {[
+                              { label: 'Heart Rate', name: 'heartRate' }, 
+                              { label: 'BP', name: 'bp' }, 
+                              { label: 'SpO2 (%)', name: 'spo2' }, 
+                              { label: 'Temp (°F)', name: 'temp' }
+                            ].map(({ label, name }) => (
+                              <div key={name} className="space-y-2">
+                                <label className="block text-xs font-bold text-[#787774] uppercase tracking-widest">{label}</label>
+                                <input 
+                                  type="text" 
+                                  name={name} 
+                                  value={editedVitals[name] || ''} 
+                                  onChange={handleVitalField}
+                                  className="minimal-input text-center font-mono"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="bento-card">
+                          <div className="flex justify-between items-center mb-6 border-b border-[#EAEAEA] pb-4">
+                            <h2 className="text-sm font-bold text-[#111111] uppercase tracking-widest flex items-center gap-2">
+                              <BookOpen size={16} className="text-[#787774]" /> Attached Documents ({patientDocs.length})
+                            </h2>
+                          </div>
+                          {patientDocs.length === 0 ? (
+                            <p className="text-[#787774] text-sm">No documents uploaded by ASHA.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {patientDocs.map(doc => (
+                                <button 
+                                  key={doc.id} 
+                                  onClick={() => setViewingDoc(doc)}
+                                  className="flex flex-col gap-2 p-4 bg-[#FBFBFA] hover:bg-[#F9F9F8] border border-[#EAEAEA] rounded-md text-left transition-colors"
+                                >
+                                  <span className="text-sm font-medium text-[#111111] flex items-center gap-2">
+                                    <FileText size={16} className="text-[#787774]" /> {doc.document_type}
+                                  </span>
+                                  <span className="text-xs text-[#787774] font-mono">
+                                    {new Date(doc.uploaded_at).toLocaleString()}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex justify-end mt-4">
+                          {selectedVisit.status === 'In Progress' && (
+                            <button 
+                              onClick={handleCompleteConsultation} 
+                              disabled={isSaving}
+                              className="btn-minimal flex items-center gap-2 px-8 py-3 bg-[#346538] hover:bg-[#284f2c]"
+                            >
+                              <CheckCircle size={18} /> Mark Consultation Complete
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
-                  </div>
+
+                    {activeTab === 'history' && (
+                      <div className="p-8">
+                        <h2 className="text-sm font-bold text-[#787774] uppercase tracking-widest mb-8 border-b border-[#EAEAEA] pb-4">
+                          Past Records — {currentPatient.name}
+                        </h2>
+                        {visitHistory.length === 0 ? (
+                          <p className="text-[#787774] text-center py-16 text-sm">No previous visits recorded.</p>
+                        ) : (
+                          <div className="flex flex-col gap-6">
+                            {visitHistory.map(v => (
+                              <div key={v.id} className={`bg-[#FBFBFA] p-6 rounded-md border border-[#EAEAEA] border-l-4 ${triageBorder(v.triage_status)}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                  <strong className="text-[#111111] font-mono text-sm">{new Date(v.created_at).toLocaleDateString()}</strong>
+                                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-widest ${triageBadge(v.triage_status)}`}>
+                                    {v.triage_status}
+                                  </span>
+                                </div>
+                                <div className="text-sm text-[#787774]">
+                                  <span className="block text-xs font-bold uppercase tracking-widest mb-1">Complaint</span>
+                                  <span className="text-[#111111]">{v.chief_complaint || 'None specified'}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* ── RIGHT PANE: Queue Sidebar ── */}
-        <div className="glass-panel" style={{ padding: 0, position: 'sticky', top: '80px', overflow: 'hidden' }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'rgba(13,148,136,0.1)' }}>
-            <h2 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ClipboardList size={16} color="#06b6d4" /> Active Queue ({activeQueue.length})
+        {/* RIGHT PANE: Queue Sidebar */}
+        <div className="bg-white border border-[#EAEAEA] rounded-xl sticky top-[100px] overflow-hidden flex flex-col max-h-[calc(100vh-140px)] shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
+          <div className="p-6 border-b border-[#EAEAEA] bg-[#F9F9F8]">
+            <h2 className="text-xs font-bold text-[#111111] uppercase tracking-widest flex items-center gap-2">
+              <ClipboardList size={14} className="text-[#787774]" /> Active Queue ({activeQueue.length})
             </h2>
           </div>
-          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '75vh', overflowY: 'auto' }}>
+          <div className="p-4 flex flex-col gap-3 overflow-y-auto flex-1 no-scrollbar bg-[#FBFBFA]">
             {activeQueue.length === 0 ? (
-              <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '32px 0' }}>Queue is clear.</p>
+              <p className="text-[#787774] text-center py-16 text-sm">Queue is clear.</p>
             ) : (
               activeQueue.map((v, idx) => {
                 const isActive = selectedVisitId === v.id;
                 const p = patientMap[v.patient_id];
                 return (
                   <button key={v.id} onClick={() => setSelectedVisitId(v.id)}
-                    style={{
-                      all: 'unset', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '12px', borderRadius: '8px', cursor: 'pointer',
-                      background: isActive ? 'linear-gradient(135deg, rgba(13,148,136,0.2) 0%, rgba(6,182,212,0.1) 100%)' : 'rgba(15,23,42,0.5)',
-                      border: `1px solid ${isActive ? 'var(--primary)' : 'transparent'}`,
-                      borderLeft: `3px solid ${triageBorder(v.triage_status)}`,
-                      opacity: isActive ? 1 : 0.8
-                    }}
+                    className={`flex justify-between items-center p-4 rounded-md text-left transition-all border ${
+                      isActive 
+                        ? 'bg-white border-[#111111] shadow-sm' 
+                        : 'bg-white border-[#EAEAEA] hover:border-[#D4D4D4]'
+                    } border-l-4 ${triageBorder(v.triage_status)}`}
                   >
                     <div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#f8fafc', marginBottom: '4px' }}>
+                      <div className="text-sm font-bold text-[#111111] mb-2">
                         #{idx + 1} {p?.name || 'Unknown'}
                       </div>
-                      <span className={triageBadge(v.triage_status)} style={{ fontSize: '0.65rem' }}>{v.triage_status}</span>
+                      <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-widest ${triageBadge(v.triage_status)}`}>
+                        {v.triage_status}
+                      </span>
                     </div>
-                    <ChevronRight size={14} color="var(--text-dim)" />
+                    <ChevronRight size={14} className={isActive ? 'text-[#111111]' : 'text-[#D4D4D4]'} />
                   </button>
                 );
               })
@@ -419,48 +477,64 @@ export default function DoctorDashboard() {
         </div>
       </main>
 
-      {/* ── Document Viewer Modal ── */}
-      {viewingDoc && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px'
-        }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', height: '90vh', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(15,23,42,0.8)' }}>
-              <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileText size={18} color="#06b6d4" />
-                {viewingDoc.document_type} — {currentPatient?.name}
-              </h3>
-              <button onClick={() => setViewingDoc(null)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div style={{ flex: 1, background: '#e2e8f0', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'auto', position: 'relative' }}>
-              {viewingDoc.file_url?.startsWith('data:image/') ? (
-                <img src={viewingDoc.file_url} alt="Medical Document" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <embed src={viewingDoc.file_url} type="application/pdf" style={{ width: '100%', height: '100%', border: 'none' }} />
-                  <div style={{ position: 'absolute', bottom: '20px', background: 'rgba(0,0,0,0.8)', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
-                    <p style={{ color: '#fff', margin: '0 0 8px' }}>If the document is blank, your browser blocked the PDF preview.</p>
-                    <a href={viewingDoc.file_url} download={`${currentPatient?.name}_${viewingDoc.document_type}`} className="btn btn-primary" style={{ padding: '8px 16px', textDecoration: 'none', display: 'inline-block' }}>
-                      Download PDF to View
-                    </a>
+      {/* Document Viewer Modal */}
+      <AnimatePresence>
+        {viewingDoc && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-[9999] p-6 sm:p-12"
+          >
+            <motion.div 
+              initial={{ scale: 0.98, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.98, y: 12 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="bg-white border border-[#EAEAEA] rounded-xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.05)]"
+            >
+              <div className="p-6 border-b border-[#EAEAEA] flex justify-between items-center bg-[#FBFBFA]">
+                <h3 className="text-[#111111] font-bold flex items-center gap-3 m-0">
+                  <FileText size={18} className="text-[#787774]" />
+                  {viewingDoc.document_type} — {currentPatient?.name}
+                </h3>
+                <button onClick={() => setViewingDoc(null)} className="text-[#787774] hover:text-[#111111] p-2 bg-white border border-[#EAEAEA] rounded-md transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+              
+              <div className="flex-1 bg-[#F7F6F3] flex items-center justify-center relative overflow-auto p-6">
+                {viewingDoc.file_url?.startsWith('data:image/') ? (
+                  <img src={viewingDoc.file_url} alt="Medical Document" className="max-w-full max-h-full object-contain rounded-md shadow-sm border border-[#EAEAEA]" />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center">
+                    <embed src={viewingDoc.file_url} type="application/pdf" className="w-full h-full rounded-md shadow-sm border border-[#EAEAEA]" />
+                    <div className="absolute bottom-8 bg-white p-6 rounded-xl text-center border border-[#EAEAEA] shadow-lg max-w-sm">
+                      <p className="text-[#787774] text-sm mb-4">If the document is blank, your browser blocked the PDF preview.</p>
+                      <a 
+                        href={viewingDoc.file_url} 
+                        download={`${currentPatient?.name}_${viewingDoc.document_type}`} 
+                        className="btn-minimal inline-block w-full"
+                      >
+                        Download PDF to View
+                      </a>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-            <div style={{ padding: '12px 24px', background: 'rgba(15,23,42,0.9)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Uploaded on {new Date(viewingDoc.uploaded_at).toLocaleString()}
-              </span>
-              <a href={viewingDoc.file_url} download={`${currentPatient?.name}_${viewingDoc.document_type}`} className="btn btn-primary" style={{ padding: '6px 16px', fontSize: '0.8rem', textDecoration: 'none' }}>
-                Download Original
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
+                )}
+              </div>
+              
+              <div className="p-6 bg-white border-t border-[#EAEAEA] flex justify-between items-center">
+                <span className="text-xs font-mono text-[#787774]">
+                  Uploaded on {new Date(viewingDoc.uploaded_at).toLocaleString()}
+                </span>
+                <a 
+                  href={viewingDoc.file_url} 
+                  download={`${currentPatient?.name}_${viewingDoc.document_type}`} 
+                  className="btn-minimal-outline"
+                >
+                  Download Original
+                </a>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
