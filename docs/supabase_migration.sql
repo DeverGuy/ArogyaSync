@@ -3,6 +3,17 @@
 -- =============================================================================
 
 
+-- ── 0. Cleanup old schema to prevent type conflicts ────────────────────────────
+drop table if exists public.visits cascade;
+drop table if exists public.doctors cascade;
+drop table if exists public.patients cascade;
+drop table if exists public.documents cascade;
+drop table if exists public.inventory cascade;
+drop table if exists public.secret_key cascade;
+-- profiles depends on auth.users so it's usually fine, but let's drop it too to be fully clean
+drop table if exists public.profiles cascade;
+
+
 -- ── 1. Enable UUID extension ──────────────────────────────────────────────────
 create extension if not exists "uuid-ossp";
 
@@ -224,3 +235,17 @@ alter publication supabase_realtime add table public.documents;
 -- Next: Create user accounts in Dashboard → Authentication → Users
 -- Set user metadata: { "role": "asha" } or { "role": "doctor", "specialty": "Cardiologist" }
 -- =============================================================================
+
+-- ── 11. secret_key ────────────────────────────────────────────────────────────
+-- For new PHC Registration verification
+create table if not exists public.secret_key (
+  id uuid primary key default uuid_generate_v4(),
+  key text not null
+);
+
+alter table public.secret_key enable row level security;
+
+-- Allow anyone to check the key for registration
+create policy "Allow read access to secret_key"
+  on public.secret_key for select
+  using (true);

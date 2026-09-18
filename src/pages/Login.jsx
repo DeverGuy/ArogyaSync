@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { isSupabaseConfigured, signIn } from '../lib/supabase';
 import { Activity, ShieldCheck, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -153,6 +153,17 @@ export default function Login() {
               {!loading && <ChevronRight size={16} />}
             </button>
           </form>
+
+          {role === 'asha' && (
+            <div className="mt-4 text-center">
+              <p className="text-xs text-[#787774]">
+                New Primary Health Centre?{' '}
+                <Link to="/register-phc" className="font-bold text-[#111111] hover:underline">
+                  Register here
+                </Link>
+              </p>
+            </div>
+          )}
 
           {!isSupabaseConfigured && (
             <div className="mt-6 pt-6 border-t border-[#EAEAEA] text-center">
