@@ -1,37 +1,40 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AppNav } from './components/common/AppNav';
+import Login from './pages/Login';
 import AshaDashboard from './pages/AshaDashboard';
 import DoctorDashboard from './pages/DoctorDashboard';
+import LoRaReceiver from './pages/LoRaReceiver';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
-/**
- * Root application component.
- *
- * Routing:
- *   /       → redirect to /asha (ASHA Worker Dashboard)
- *   /asha   → ASHA Worker Dashboard (offline-first, Dexie/IndexedDB)
- *   /doctor → Doctor Dashboard (realtime, Supabase)
- *
- * AppNav sits above both dashboards for role switching.
- * Each dashboard has its own self-contained header.
- */
 export function App() {
   return (
-    <Router>
-      {/* Top-level role switcher – always visible */}
-      <AppNav />
+    <ErrorBoundary>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/gateway" element={<LoRaReceiver />} />
 
-      <Routes>
-        {/* Default: redirect to ASHA dashboard */}
-        <Route path="/" element={<Navigate to="/asha" replace />} />
-
-        {/* ASHA Worker Dashboard */}
-        <Route path="/asha" element={<AshaDashboard />} />
-
-        {/* Doctor Dashboard */}
-        <Route path="/doctor" element={<DoctorDashboard />} />
-      </Routes>
-    </Router>
+          <Route
+            path="/asha"
+            element={
+              <ProtectedRoute requiredRole="asha">
+                <AshaDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor"
+            element={
+              <ProtectedRoute requiredRole="doctor">
+                <DoctorDashboard />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </Router>
+    </ErrorBoundary>
   );
 }
 
