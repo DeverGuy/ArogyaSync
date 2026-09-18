@@ -7,6 +7,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 3000,
-    host: true
+    host: true,
+    allowedHosts: ['arogyasync-80w9.onrender.com']
+  },
+  preview: {
+    port: 3000,
+    host: true,
+    allowedHosts: ['arogyasync-80w9.onrender.com']
   }
 });
