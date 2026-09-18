@@ -5,7 +5,7 @@ import { enqueueOfflineAction } from '../../lib/syncManager';
 import {
   Users, AlertTriangle, CheckCircle, ShieldAlert,
   ChevronRight, QrCode, Filter, Edit, X, Save, Stethoscope, Clock,
-  Upload, FileUp, FileText, User, Activity
+  Upload, FileUp, FileText, User, Activity, Trash2
 } from 'lucide-react';
 import { TriageForm } from './TriageForm';
 import { motion, AnimatePresence } from 'motion/react';
@@ -204,6 +204,17 @@ export function QueueManager({ onSelectQR }) {
     }
   };
 
+  const handleDeleteVisit = async (visitId) => {
+    if (!window.confirm('Are you sure you want to delete this patient visit? This action cannot be undone.')) return;
+    try {
+      await db.visits.delete(visitId);
+      await enqueueOfflineAction('visits', 'DELETE', { id: visitId });
+      setEditingVisit(null);
+    } catch (err) {
+      console.error('Failed to delete visit', err);
+    }
+  };
+
   const getTriageBadgeClasses = (t) => {
     if (t === 'Red') return 'bg-[#FDEBEC] text-[#9F2F2D]';
     if (t === 'Yellow') return 'bg-[#FBF3DB] text-[#956400]';
@@ -379,6 +390,11 @@ export function QueueManager({ onSelectQR }) {
                       <button onClick={() => openEditModal(visit)} className="flex items-center justify-between w-full text-xs px-3 py-2 bg-white border border-[#EAEAEA] text-[#111111] rounded-md hover:scale-95 transition-transform cursor-pointer">
                         <span>Edit Details</span>
                         <Edit size={14} className="text-[#111111]" />
+                      </button>
+
+                      <button onClick={() => handleDeleteVisit(visit.id)} className="flex items-center justify-between w-full text-xs px-3 py-2 bg-[#FDEBEC] border border-[#FDEBEC] text-[#9F2F2D] rounded-md hover:scale-95 transition-transform cursor-pointer">
+                        <span>Delete</span>
+                        <Trash2 size={14} className="text-[#9F2F2D]" />
                       </button>
 
                       {visit.triage_status !== 'Red' && visit.status === 'Waiting' && (
@@ -558,11 +574,16 @@ export function QueueManager({ onSelectQR }) {
                   </div>
                 </div>
 
-                <div className="flex gap-2.5 justify-end mt-6">
-                  <button type="button" onClick={() => setEditingVisit(null)} className="px-4 py-2 bg-white border border-[#EAEAEA] text-[#111111] text-sm font-medium rounded-md hover:scale-95 transition-transform cursor-pointer">Cancel</button>
-                  <button type="submit" className="flex items-center justify-center gap-1.5 px-5 py-2 bg-[#111111] text-white text-sm font-medium rounded-md hover:scale-95 transition-transform cursor-pointer">
-                    <Save size={15} /> Save All Details
+                <div className="flex gap-2.5 justify-between mt-6">
+                  <button type="button" onClick={() => handleDeleteVisit(editingVisit.id)} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-[#FDEBEC] text-[#9F2F2D] border border-[#FDEBEC] text-sm font-medium rounded-md hover:scale-95 transition-transform cursor-pointer">
+                    <Trash2 size={15} /> Delete
                   </button>
+                  <div className="flex gap-2.5">
+                    <button type="button" onClick={() => setEditingVisit(null)} className="px-4 py-2 bg-white border border-[#EAEAEA] text-[#111111] text-sm font-medium rounded-md hover:scale-95 transition-transform cursor-pointer">Cancel</button>
+                    <button type="submit" className="flex items-center justify-center gap-1.5 px-5 py-2 bg-[#111111] text-white text-sm font-medium rounded-md hover:scale-95 transition-transform cursor-pointer">
+                      <Save size={15} /> Save All Details
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>

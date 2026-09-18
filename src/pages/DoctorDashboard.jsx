@@ -31,6 +31,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     const radioChannel = new BroadcastChannel('lora_radio');
     radioChannel.onmessage = (event) => {
+      if (event.data.type === 'inventory') return; // Filter out inventory from doctor's radio
       setRadioPackets(prev => {
         const isDuplicate = prev.some(p => p.id === event.data.id && p.ts === event.data.ts);
         if (isDuplicate) return prev;
