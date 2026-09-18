@@ -4,525 +4,452 @@ import { db } from '../lib/db';
 import { enqueueOfflineAction } from '../lib/syncManager';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
-  User,
-  Activity,
-  FileText,
-  ChevronRight,
-  CheckCircle,
-  Save,
-  Stethoscope,
-  Wifi,
-  WifiOff,
-  Users,
-  ClipboardList
+  User, Activity, FileText, History, ChevronRight, CheckCircle, Save,
+  Stethoscope, Wifi, WifiOff, Users, X, BookOpen, ClipboardList, Radio
 } from 'lucide-react';
 
-/**
- * Doctor Dashboard (Urban Gateway Node)
- *
- * Data flow:
- *  - Primary: reads from Dexie IndexedDB (same local DB the ASHA dashboard writes to)
- *  - When online + Supabase configured: subscribes to Supabase Realtime on 'queue' table
- *    and triggers a Dexie re-read on changes (bridging realtime updates)
- *  - Writes (patient updates, consultation completion) go to both Dexie and
- *    the sync queue for Supabase replay
- *
- * Schema aligned with Supabase (Moksh's migration):
- *   patients: name, phone, emergency_phone, blood_group, gender, height, weight, age, vitals (object), notes
- *   queue: patient_id, triage_status ('Red'|'Yellow'|'Green'), survival_info,
- *          status ('Waiting'|'In Progress'|'Completed'), age, height, weight, vitals (object)
- */
+const TRIAGE_PRIORITY = { Red: 1, Yellow: 2, Green: 3 };
+
 export default function DoctorDashboard() {
-  const [currentQueueId, setCurrentQueueId] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [selectedVisitId, setSelectedVisitId] = useState(null);
+  const [isSaving, setIsSaving]               = useState(false);
+  const [isOnline, setIsOnline]               = useState(navigator.onLine);
+  const [activeTab, setActiveTab]             = useState('current'); // 'current' | 'history' | 'lora'
+  const [viewingDoc, setViewingDoc]           = useState(null);
+  const [editedPatient, setEditedPatient]     = useState({});
+  const [editedVitals, setEditedVitals]       = useState({});
+  const [radioPackets, setRadioPackets]       = useState([]); 
 
-  // Live queue from Dexie — sorted Red > Yellow > Green, only Waiting + In Progress
-  const queueEntries = useLiveQuery(
-    () => db.queue.where('status').notEqual('Completed').toArray(),
-    []
-  ) || [];
-
-  const patients = useLiveQuery(() => db.patients.toArray(), []) || [];
-
-  const patientMap = patients.reduce((acc, p) => {
-    acc[p.id] = p;
-    return acc;
-  }, {});
-
-  const TRIAGE_PRIORITY = { Red: 1, Yellow: 2, Green: 3 };
-  const sortedQueue = [...queueEntries].sort((a, b) => {
-    const pA = TRIAGE_PRIORITY[a.triage_status] ?? 4;
-    const pB = TRIAGE_PRIORITY[b.triage_status] ?? 4;
-    if (pA !== pB) return pA - pB;
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-  });
-
-  const waitingQueue = sortedQueue.filter(q => q.status === 'Waiting');
-
-  // The active queue entry being consulted
-  const currentQueueEntry = currentQueueId
-    ? queueEntries.find(q => q.id === currentQueueId) ?? null
-    : null;
-  const currentPatientData = currentQueueEntry
-    ? patientMap[currentQueueEntry.patient_id] ?? null
-    : null;
-
-  // Local editable state for the current patient's fields
-  const [editedPatient, setEditedPatient] = useState(null);
-  const [editedQueue, setEditedQueue] = useState(null);
-
-  // Sync editedPatient/editedQueue when selection changes
   useEffect(() => {
-    if (currentPatientData) {
-      setEditedPatient({ ...currentPatientData });
-    } else {
-      setEditedPatient(null);
-    }
-    if (currentQueueEntry) {
-      setEditedQueue({ ...currentQueueEntry });
-    } else {
-      setEditedQueue(null);
-    }
-  }, [currentQueueId, currentPatientData?.id, currentQueueEntry?.id]);
+    const radioChannel = new BroadcastChannel('lora_radio');
+    radioChannel.onmessage = (event) => {
+      setRadioPackets(prev => [{ ...event.data, _receivedAt: new Date().toISOString() }, ...prev]);
+    };
+    return () => radioChannel.close();
+  }, []);
 
-  // Auto-select first waiting patient if none selected
-  useEffect(() => {
-    if (!currentQueueId && waitingQueue.length > 0) {
-      setCurrentQueueId(waitingQueue[0].id);
-    }
-  }, [waitingQueue.length]);
-
-  // Supabase Realtime subscription — bridges cloud updates into Dexie
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    let subscription = null;
-    if (isSupabaseConfigured) {
-      subscription = supabase
-        .channel('doctor_queue_realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, async (payload) => {
-          // Upsert remote change into local Dexie so useLiveQuery picks it up
-          try {
-            if (payload.eventType === 'DELETE') {
-              await db.queue.delete(payload.old.id);
-            } else {
-              const record = payload.new;
-              await db.queue.put(record);
-            }
-          } catch (e) {
-            console.warn('[DoctorDashboard] Dexie upsert from realtime failed:', e);
-          }
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, async (payload) => {
-          try {
-            if (payload.eventType !== 'DELETE') {
-              await db.patients.put(payload.new);
-            }
-          } catch (e) {
-            console.warn('[DoctorDashboard] Dexie patient upsert from realtime failed:', e);
-          }
-        })
-        .subscribe();
-    }
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      if (subscription) supabase.removeChannel(subscription);
     };
   }, []);
 
-  const handlePatientFieldChange = (e) => {
-    const { name, value } = e.target;
-    setEditedPatient(prev => ({ ...prev, [name]: value }));
-  };
+  const allVisits = useLiveQuery(() => {
+    if (!db.visits) return [];
+    return db.visits.toArray().catch(e => { console.error(e); return []; });
+  }, []) || [];
+  
+  const patients = useLiveQuery(() => {
+    if (!db.patients) return [];
+    return db.patients.toArray().catch(e => { console.error(e); return []; });
+  }, []) || [];
+  
+  const documents = useLiveQuery(() => {
+    if (!db.documents) return [];
+    return db.documents.toArray().catch(e => { console.error(e); return []; });
+  }, []) || [];
 
-  const handleVitalChange = (e) => {
-    const { name, value } = e.target;
-    setEditedQueue(prev => ({
-      ...prev,
-      vitals: { ...(prev?.vitals || {}), [name]: value }
-    }));
-  };
+  const patientMap = patients.reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
 
-  const handleNotesChange = (e) => {
-    setEditedPatient(prev => ({ ...prev, notes: e.target.value }));
-  };
+  let activeQueue = allVisits.filter(v => ['Waiting', 'In Consultation', 'In Progress'].includes(v.status));
+  activeQueue.sort((a, b) => {
+    const pA = TRIAGE_PRIORITY[a.triage_status] ?? 4;
+    const pB = TRIAGE_PRIORITY[b.triage_status] ?? 4;
+    if (pA !== pB) return pA - pB;
+    return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+  });
 
-  const savePatientData = async () => {
-    if (!editedPatient || !currentQueueEntry) return;
-    setIsSaving(true);
+  const selectedVisit = allVisits.find(v => v.id === selectedVisitId);
+  const currentPatient = selectedVisit ? patientMap[selectedVisit.patient_id] : null;
+  const visitHistory = currentPatient
+    ? allVisits.filter(v => v.patient_id === currentPatient.id && v.status === 'Completed')
+    : [];
+  const patientDocs = currentPatient
+    ? documents.filter(d => d.patient_id === currentPatient.id)
+    : [];
 
-    try {
-      const now = new Date().toISOString();
-
-      // Update patient in Dexie
-      const patientUpdate = {
-        id: editedPatient.id,
-        name: editedPatient.name,
-        blood_group: editedPatient.blood_group,
-        gender: editedPatient.gender,
-        phone: editedPatient.phone,
-        emergency_phone: editedPatient.emergency_phone,
-        height: parseFloat(editedPatient.height) || null,
-        weight: parseFloat(editedPatient.weight) || null,
-        age: parseInt(editedPatient.age) || null,
-        vitals: editedQueue?.vitals ?? editedPatient.vitals,
-        notes: editedPatient.notes
-      };
-
-      await db.patients.update(editedPatient.id, patientUpdate);
-      await enqueueOfflineAction('patients', 'UPDATE', patientUpdate);
-
-      // Update queue vitals if changed
-      if (editedQueue?.vitals) {
-        const queueUpdate = { id: currentQueueEntry.id, vitals: editedQueue.vitals, updated_at: now };
-        await db.queue.update(currentQueueEntry.id, queueUpdate);
-        await enqueueOfflineAction('queue', 'UPDATE', queueUpdate);
-      }
-    } catch (err) {
-      console.error('[DoctorDashboard] Save failed:', err);
-    } finally {
-      setIsSaving(false);
+  useEffect(() => {
+    if (selectedVisit && currentPatient) {
+      setEditedPatient({
+        name: currentPatient.name || '',
+        blood_group: currentPatient.blood_group || '',
+        gender: currentPatient.gender || '',
+        phone: currentPatient.phone || '',
+        emergency_phone: currentPatient.emergency_phone || ''
+      });
+      setEditedVitals(selectedVisit.vitals || {});
+    } else {
+      setEditedPatient({});
+      setEditedVitals({});
     }
-  };
+  }, [selectedVisitId, currentPatient?.id]);
 
-  const completeConsultation = async () => {
-    if (!currentQueueEntry) return;
+  useEffect(() => {
+    if (!selectedVisitId && activeQueue.length > 0) {
+      setSelectedVisitId(activeQueue[0].id);
+    }
+  }, [activeQueue, selectedVisitId]);
+
+  const handleStartConsultation = async () => {
+    if (!selectedVisit) return;
+    setIsSaving(true);
     const now = new Date().toISOString();
-    const payload = { id: currentQueueEntry.id, status: 'Completed', updated_at: now };
-
-    await db.queue.update(currentQueueEntry.id, payload);
-    await enqueueOfflineAction('queue', 'UPDATE', payload);
-
-    setCurrentQueueId(null);
+    const updatePayload = { status: 'In Progress', updated_at: now, id: selectedVisit.id };
+    await db.visits.update(selectedVisit.id, updatePayload);
+    await enqueueOfflineAction('visits', 'UPDATE', updatePayload);
+    setIsSaving(false);
   };
 
-  const triageBadgeClass = (status) => {
-    const s = status?.toLowerCase();
-    if (s === 'red') return 'badge badge-red';
-    if (s === 'yellow') return 'badge badge-yellow';
+  const handlePatientField = (e) => setEditedPatient(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleVitalField = (e) => setEditedVitals(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleSavePatientInfo = async () => {
+    if (!currentPatient) return;
+    setIsSaving(true);
+    const update = { ...editedPatient, updated_at: new Date().toISOString() };
+    await db.patients.update(currentPatient.id, update);
+    await enqueueOfflineAction('patients', 'UPDATE', { id: currentPatient.id, ...update });
+    setIsSaving(false);
+  };
+
+  const handleSaveVitals = async () => {
+    if (!selectedVisit) return;
+    setIsSaving(true);
+    const update = { vitals: editedVitals, updated_at: new Date().toISOString() };
+    await db.visits.update(selectedVisit.id, update);
+    await enqueueOfflineAction('visits', 'UPDATE', { id: selectedVisit.id, ...update });
+    setIsSaving(false);
+  };
+
+  const handleCompleteConsultation = async () => {
+    if (!selectedVisit) return;
+    const now = new Date().toISOString();
+    const update = { status: 'Completed', updated_at: now };
+    await db.visits.update(selectedVisit.id, update);
+    await enqueueOfflineAction('visits', 'UPDATE', { id: selectedVisit.id, ...update });
+    setSelectedVisitId(null);
+  };
+
+  const triageBadge = (level) => {
+    if (level === 'Red') return 'badge badge-red';
+    if (level === 'Yellow') return 'badge badge-yellow';
     return 'badge badge-green';
   };
-
-  const triageBorderColor = (status) => {
-    const s = status?.toLowerCase();
-    if (s === 'red') return 'var(--triage-red-solid)';
-    if (s === 'yellow') return 'var(--triage-yellow-solid)';
-    return 'var(--triage-green-solid)';
+  const triageBorder = (level) => {
+    if (level === 'Red') return '#ef4444';
+    if (level === 'Yellow') return '#f59e0b';
+    return '#10b981';
   };
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '40px' }}>
-
-      {/* Doctor Dashboard Header */}
-      <header className="glass-panel" style={{ borderRadius: '0 0 16px 16px', marginBottom: '24px' }}>
-        <div className="container" style={{ padding: '16px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-
-            {/* Logo */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div style={{
-                width: '44px', height: '44px', borderRadius: '12px',
-                background: 'linear-gradient(135deg, #0d9488 0%, #06b6d4 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 0 15px rgba(13, 148, 136, 0.4)'
-              }}>
-                <Stethoscope size={26} color="#ffffff" />
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f8fafc', margin: 0 }}>
-                    ArogyaSync <span style={{ color: '#06b6d4', fontSize: '0.9rem', fontWeight: 600 }}>Doctor</span>
-                  </h1>
-                  <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>Agent 2</span>
-                </div>
-                <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0 }}>
-                  Real-time Consultation & Patient Management
-                </p>
-              </div>
-            </div>
-
-            {/* Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
-                background: 'rgba(15, 23, 42, 0.6)', borderRadius: '20px',
-                border: '1px solid var(--border-color)', fontSize: '0.8rem', color: 'var(--text-muted)'
-              }}>
-                <Users size={14} color="#06b6d4" />
-                <span>Queue: <strong style={{ color: '#f8fafc' }}>{waitingQueue.length} waiting</strong></span>
-              </div>
-
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px',
-                borderRadius: '10px', fontSize: '0.8rem',
-                background: isOnline ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.15)',
-                border: `1px solid ${isOnline ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.4)'}`,
-                color: isOnline ? '#6ee7b7' : '#fca5a5'
-              }}>
-                {isOnline ? (
-                  <>
-                    <Wifi size={15} color="#10b981" />
-                    <span className="animate-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                    <span>Realtime Active</span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff size={15} color="#ef4444" />
-                    <span className="animate-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-                    <span>Offline</span>
-                  </>
-                )}
-              </div>
-            </div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-main)', color: '#f8fafc', paddingBottom: '40px' }}>
+      
+      {/* ── HEADER ── */}
+      <header className="glass-panel" style={{ borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none', padding: '16px 24px', marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, var(--primary) 0%, #0891b2 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Stethoscope size={24} color="#fff" />
+          </div>
+          <div>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#f8fafc', letterSpacing: '-0.02em' }}>Doctor Dashboard</h1>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '2px 0 0' }}>Consultation & Records System</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', background: 'rgba(15,23,42,0.5)', borderRadius: '20px', border: '1px solid var(--border-color)', fontSize: '0.8rem', color: isOnline ? '#10b981' : '#ef4444' }}>
+            {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+            <span style={{ fontWeight: 600 }}>{isOnline ? 'Online Synced' : 'Offline Mode'}</span>
           </div>
         </div>
       </header>
 
-      {/* Main Layout */}
-      <div className="container">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', alignItems: 'start' }}>
+      {/* ── MAIN LAYOUT ── */}
+      <main className="container" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'flex-start' }}>
+        
+        {/* ── LEFT PANE ── */}
+        <div className="glass-panel" style={{ padding: 0, overflow: 'hidden', minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
+          
+          {/* Tab Navigation (Always Visible) */}
+          <div style={{ display: 'flex', gap: '8px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', background: 'rgba(15,23,42,0.6)' }}>
+            {[
+              { key: 'current', label: 'Current Consultation', icon: <Stethoscope size={14} /> },
+              { key: 'history', label: `History (${visitHistory.length})`, icon: <History size={14} /> },
+              { key: 'lora',    label: `Radio Receiver (${radioPackets.length})`, icon: <Radio size={14} /> }
+            ].map(({ key, label, icon }) => (
+              <button key={key} onClick={() => setActiveTab(key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                  background: activeTab === key ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                  color: activeTab === key ? '#fff' : 'var(--text-muted)',
+                  fontWeight: 600, fontSize: '0.85rem'
+                }}
+              >
+                {icon} {label}
+              </button>
+            ))}
+          </div>
 
-          {/* ── Left: Patient Workspace ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-            {!currentQueueEntry || !editedPatient ? (
-              <div className="glass-panel" style={{ padding: '48px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', minHeight: '320px' }}>
-                <div style={{
-                  width: '64px', height: '64px', borderRadius: '50%',
-                  background: 'rgba(13, 148, 136, 0.1)', border: '1px solid rgba(13, 148, 136, 0.25)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  <ClipboardList size={28} color="var(--primary)" />
+          {/* Content Area */}
+          <div style={{ flex: 1 }}>
+            {activeTab === 'lora' ? (
+              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h2 style={{ fontSize: '0.9rem', color: '#10b981', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Radio size={16} color="#10b981" /> Incoming LoRa Transmissions
+                  </h2>
+                  <button onClick={() => setRadioPackets([])} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>
+                    Clear Log
+                  </button>
                 </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', textAlign: 'center' }}>
-                  No active patient. Select one from the queue on the right.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Patient Identity */}
-                <div className="glass-panel" style={{ padding: '24px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                      <User size={18} color="#06b6d4" />
-                      Patient Identity
-                    </h2>
-                    <span className={triageBadgeClass(currentQueueEntry.triage_status)}>
-                      Triage: {currentQueueEntry.triage_status}
-                    </span>
-                  </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-                    {[
-                      { label: 'Full Name', field: 'name', type: 'text' },
-                      { label: 'Blood Group', field: 'blood_group', type: 'text' },
-                      { label: 'Gender', field: 'gender', type: 'text' },
-                      { label: 'Phone Number', field: 'phone', type: 'text' },
-                      { label: 'Emergency Phone', field: 'emergency_phone', type: 'text' }
-                    ].map(({ label, field, type }) => (
-                      <div key={field}>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</label>
-                        <input
-                          type={type}
-                          className="input-field"
-                          name={field}
-                          value={editedPatient?.[field] || ''}
-                          onChange={handlePatientFieldChange}
-                        />
-                      </div>
-                    ))}
-                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                      <button
-                        className="btn btn-primary"
-                        onClick={savePatientData}
-                        style={{ width: '100%' }}
-                        disabled={isSaving}
-                      >
-                        <Save size={16} />
-                        {isSaving ? 'Saving…' : 'Save Updates'}
-                      </button>
+                <div style={{ flex: 1, background: '#020617', borderRadius: '12px', border: '1px solid #1e293b', padding: '16px', overflowY: 'auto', maxHeight: '500px', fontFamily: 'monospace' }}>
+                  {radioPackets.length === 0 ? (
+                    <div style={{ color: '#334155', textAlign: 'center', padding: '40px 0' }}>
+                      <Radio size={48} style={{ opacity: 0.5, marginBottom: '16px' }} />
+                      <p style={{ margin: 0 }}>Listening on 868 MHz...</p>
+                      <p style={{ fontSize: '0.75rem', marginTop: '8px' }}>Waiting for ASHA transmission.</p>
                     </div>
-                  </div>
-
-                  {/* ASHA Critical Note */}
-                  {currentQueueEntry.survival_info && (
-                    <div style={{
-                      marginTop: '16px', padding: '14px 16px',
-                      background: 'var(--triage-red-bg)', border: '1px solid var(--triage-red-border)',
-                      borderRadius: 'var(--radius-md)'
-                    }}>
-                      <h4 style={{ color: 'var(--triage-red-text)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-                        <Activity size={15} /> Critical Intake Note from ASHA Worker
-                      </h4>
-                      <p style={{ color: '#f1f5f9', fontSize: '0.875rem', margin: 0 }}>{currentQueueEntry.survival_info}</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {radioPackets.map((pkt, idx) => (
+                        <div key={idx} style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#10b981', fontSize: '0.75rem' }}>
+                            <span>[RX] {new Date(pkt._receivedAt).toLocaleTimeString()}</span>
+                            <span>Signal: -84 dBm</span>
+                          </div>
+                          <pre style={{ margin: 0, color: '#f8fafc', fontSize: '0.8rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                            {JSON.stringify(pkt, null, 2)}
+                          </pre>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-
-                {/* Vitals & Biometrics */}
-                <div className="glass-panel" style={{ padding: '24px' }}>
-                  <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '20px' }}>
-                    <Activity size={18} color="#06b6d4" />
-                    Medical Vitals & Biometrics
-                  </h2>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
-                    {[
-                      { label: 'Height (cm)', field: 'height', type: 'number', src: 'patient' },
-                      { label: 'Weight (kg)', field: 'weight', type: 'number', src: 'patient' },
-                      { label: 'Age', field: 'age', type: 'number', src: 'patient' }
-                    ].map(({ label, field, type }) => (
-                      <div key={field}>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</label>
-                        <input
-                          type={type}
-                          className="input-field"
-                          name={field}
-                          value={editedPatient?.[field] || ''}
-                          onChange={handlePatientFieldChange}
-                        />
+              </div>
+            ) : (!selectedVisit || !currentPatient) ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', color: 'var(--text-dim)' }}>
+                <Users size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
+                <h3>No Active Patient</h3>
+                <p>Select a patient from the queue to begin consultation.</p>
+              </div>
+            ) : (
+              <>
+                {activeTab === 'current' && (
+                  <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {selectedVisit.status === 'In Consultation' && (
+                      <div style={{ padding: '16px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h3 style={{ margin: '0 0 4px', color: '#60a5fa', fontSize: '1rem' }}>Patient is Waiting</h3>
+                          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Review the details below and start the consultation when ready.</p>
+                        </div>
+                        <button className="btn btn-primary" onClick={handleStartConsultation} disabled={isSaving} style={{ background: '#3b82f6', padding: '12px 24px', fontWeight: 'bold' }}>
+                          Start Consultation
+                        </button>
                       </div>
-                    ))}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Heart Rate (bpm)</label>
-                      <input
-                        type="text"
-                        className="input-field"
-                        name="heartRate"
-                        value={editedQueue?.vitals?.heartRate || ''}
-                        onChange={handleVitalChange}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Blood Pressure</label>
-                      <input
-                        type="text"
-                        className="input-field"
-                        name="bp"
-                        value={editedQueue?.vitals?.bp || ''}
-                        onChange={handleVitalChange}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>SpO2 (%)</label>
-                      <input
-                        type="text"
-                        className="input-field"
-                        name="spo2"
-                        value={editedQueue?.vitals?.spo2 || ''}
-                        onChange={handleVitalChange}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Temp (°F)</label>
-                      <input
-                        type="text"
-                        className="input-field"
-                        name="temp"
-                        value={editedQueue?.vitals?.temp || ''}
-                        onChange={handleVitalChange}
-                      />
-                    </div>
-                  </div>
-                </div>
+                    )}
 
-                {/* Clinical Notes */}
-                <div className="glass-panel" style={{ padding: '24px' }}>
-                  <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '20px' }}>
-                    <FileText size={18} color="#06b6d4" />
-                    Documentation & Records
-                  </h2>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Clinical Notes</label>
-                    <textarea
-                      className="input-field"
-                      rows={5}
-                      value={editedPatient?.notes || ''}
-                      onChange={handleNotesChange}
-                      placeholder="Enter clinical notes, prescriptions, follow-up instructions…"
-                      style={{ resize: 'vertical' }}
-                    />
+                    <div className="glass-panel" style={{ padding: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <User size={16} color="#06b6d4" /> Patient Identity
+                        </h2>
+                        <span className={triageBadge(selectedVisit.triage_status)}>
+                          Triage: {selectedVisit.triage_status}
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        {[{ label: 'Full Name', name: 'name' }, { label: 'Blood Group', name: 'blood_group' }, { label: 'Gender', name: 'gender' }, { label: 'Phone', name: 'phone' }].map(({ label, name }) => (
+                          <div key={name}>
+                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</label>
+                            <input type="text" className="input-field" name={name} value={editedPatient[name] || ''} onChange={handlePatientField} />
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                        <button className="btn btn-secondary" onClick={handleSavePatientInfo} disabled={isSaving}>
+                          <Save size={14} /> {isSaving ? 'Saving...' : 'Save Info'}
+                        </button>
+                      </div>
+                      {selectedVisit.survival_info && (
+                        <div style={{ marginTop: '16px', padding: '12px', background: 'var(--triage-red-bg)', border: '1px solid var(--triage-red-border)', borderRadius: '8px' }}>
+                          <h4 style={{ color: 'var(--triage-red-text)', margin: '0 0 6px', fontSize: '0.85rem' }}>Critical ASHA Note:</h4>
+                          <p style={{ color: '#fff', margin: 0, fontSize: '0.9rem' }}>{selectedVisit.survival_info}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="glass-panel" style={{ padding: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Activity size={16} color="#10b981" /> Current Vitals
+                        </h2>
+                        <button className="btn btn-primary" onClick={handleSaveVitals} disabled={isSaving} style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+                          <Save size={14} /> {isSaving ? 'Saving...' : 'Update Vitals'}
+                        </button>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+                        {[{ label: 'Heart Rate', name: 'heartRate' }, { label: 'BP', name: 'bp' }, { label: 'SpO2 (%)', name: 'spo2' }, { label: 'Temp (°F)', name: 'temp' }].map(({ label, name }) => (
+                          <div key={name}>
+                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</label>
+                            <input type="text" className="input-field" name={name} value={editedVitals[name] || ''} onChange={handleVitalField} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="glass-panel" style={{ padding: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <BookOpen size={16} color="#3b82f6" /> Attached Documents ({patientDocs.length})
+                        </h2>
+                      </div>
+                      {patientDocs.length === 0 ? (
+                        <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', margin: 0 }}>No documents uploaded by ASHA.</p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                          {patientDocs.map(doc => (
+                            <button key={doc.id} onClick={() => setViewingDoc(doc)}
+                              style={{ padding: '12px', background: 'rgba(15,23,42,0.5)', border: '1px solid var(--border-color)', borderRadius: '8px', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '6px' }}
+                            >
+                              <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#06b6d4', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <FileText size={14} /> {doc.document_type}
+                              </span>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                {new Date(doc.uploaded_at).toLocaleString()}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', gap: '12px' }}>
+                      {selectedVisit.status !== 'In Consultation' && (
+                        <button className="btn btn-primary" onClick={handleCompleteConsultation} disabled={isSaving} style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', padding: '12px 24px' }}>
+                          <CheckCircle size={18} /> Mark Consultation Complete
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-                    <button
-                      className="btn btn-primary"
-                      onClick={completeConsultation}
-                      style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)' }}
-                    >
-                      <CheckCircle size={16} />
-                      Mark Consultation Complete
-                    </button>
+                )}
+
+                {activeTab === 'history' && (
+                  <div style={{ padding: '24px' }}>
+                    <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '16px' }}>
+                      Past Records — {currentPatient.name}
+                    </h2>
+                    {visitHistory.length === 0 ? (
+                      <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '32px' }}>No previous visits recorded.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {visitHistory.map(v => (
+                          <div key={v.id} className="glass-panel" style={{ padding: '16px', borderLeft: `4px solid ${triageBorder(v.triage_status)}` }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <strong style={{ color: '#fff' }}>{new Date(v.created_at).toLocaleDateString()}</strong>
+                              <span className={triageBadge(v.triage_status)}>{v.triage_status}</span>
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                              Complaint: <span style={{ color: '#fff' }}>{v.chief_complaint || 'None specified'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
               </>
             )}
           </div>
+        </div>
 
-          {/* ── Right: Incoming Queue Sidebar ── */}
-          <div className="glass-panel" style={{ padding: 0, overflow: 'hidden', position: 'sticky', top: '60px' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)', background: 'rgba(13, 148, 136, 0.08)' }}>
-              <h2 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Users size={16} color="#06b6d4" />
-                Incoming Queue
-              </h2>
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px', marginBottom: 0 }}>
-                Live • Sorted by triage priority
-              </p>
-            </div>
-
-            <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '70vh', overflowY: 'auto' }}>
-              {waitingQueue.length === 0 ? (
-                <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '32px 0', fontSize: '0.85rem' }}>
-                  Queue is clear.
-                </p>
-              ) : (
-                waitingQueue.map((q, index) => {
-                  const isActive = currentQueueId === q.id;
-                  const p = patientMap[q.patient_id];
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => setCurrentQueueId(q.id)}
-                      style={{
-                        all: 'unset',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '12px 14px', borderRadius: 'var(--radius-md)',
-                        background: isActive
-                          ? 'linear-gradient(135deg, rgba(13, 148, 136, 0.2) 0%, rgba(6, 182, 212, 0.12) 100%)'
-                          : 'rgba(15, 23, 42, 0.5)',
-                        border: `1px solid ${isActive ? 'var(--primary)' : 'transparent'}`,
-                        borderLeft: `3px solid ${triageBorderColor(q.triage_status)}`,
-                        cursor: 'pointer', transition: 'all 0.2s ease', opacity: isActive ? 1 : 0.75
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '0.68rem', background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '6px', color: 'var(--text-dim)' }}>
-                            #{index + 1}
-                          </span>
-                          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f8fafc', margin: 0 }}>
-                            {p?.name || 'Unknown'}
-                          </h3>
-                        </div>
-                        <span className={triageBadgeClass(q.triage_status)} style={{ fontSize: '0.65rem' }}>
-                          {q.triage_status}
-                        </span>
+        {/* ── RIGHT PANE: Queue Sidebar ── */}
+        <div className="glass-panel" style={{ padding: 0, position: 'sticky', top: '80px', overflow: 'hidden' }}>
+          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'rgba(13,148,136,0.1)' }}>
+            <h2 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ClipboardList size={16} color="#06b6d4" /> Active Queue ({activeQueue.length})
+            </h2>
+          </div>
+          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '75vh', overflowY: 'auto' }}>
+            {activeQueue.length === 0 ? (
+              <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '32px 0' }}>Queue is clear.</p>
+            ) : (
+              activeQueue.map((v, idx) => {
+                const isActive = selectedVisitId === v.id;
+                const p = patientMap[v.patient_id];
+                return (
+                  <button key={v.id} onClick={() => setSelectedVisitId(v.id)}
+                    style={{
+                      all: 'unset', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '12px', borderRadius: '8px', cursor: 'pointer',
+                      background: isActive ? 'linear-gradient(135deg, rgba(13,148,136,0.2) 0%, rgba(6,182,212,0.1) 100%)' : 'rgba(15,23,42,0.5)',
+                      border: `1px solid ${isActive ? 'var(--primary)' : 'transparent'}`,
+                      borderLeft: `3px solid ${triageBorder(v.triage_status)}`,
+                      opacity: isActive ? 1 : 0.8
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#f8fafc', marginBottom: '4px' }}>
+                        #{idx + 1} {p?.name || 'Unknown'}
                       </div>
-                      <ChevronRight size={16} color="var(--text-dim)" />
-                    </button>
-                  );
-                })
+                      <span className={triageBadge(v.triage_status)} style={{ fontSize: '0.65rem' }}>{v.triage_status}</span>
+                    </div>
+                    <ChevronRight size={14} color="var(--text-dim)" />
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* ── Document Viewer Modal ── */}
+      {viewingDoc && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px'
+        }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', height: '90vh', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(15,23,42,0.8)' }}>
+              <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText size={18} color="#06b6d4" />
+                {viewingDoc.document_type} — {currentPatient?.name}
+              </h3>
+              <button onClick={() => setViewingDoc(null)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div style={{ flex: 1, background: '#e2e8f0', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'auto', position: 'relative' }}>
+              {viewingDoc.file_url?.startsWith('data:image/') ? (
+                <img src={viewingDoc.file_url} alt="Medical Document" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <embed src={viewingDoc.file_url} type="application/pdf" style={{ width: '100%', height: '100%', border: 'none' }} />
+                  <div style={{ position: 'absolute', bottom: '20px', background: 'rgba(0,0,0,0.8)', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
+                    <p style={{ color: '#fff', margin: '0 0 8px' }}>If the document is blank, your browser blocked the PDF preview.</p>
+                    <a href={viewingDoc.file_url} download={`${currentPatient?.name}_${viewingDoc.document_type}`} className="btn btn-primary" style={{ padding: '8px 16px', textDecoration: 'none', display: 'inline-block' }}>
+                      Download PDF to View
+                    </a>
+                  </div>
+                </div>
               )}
             </div>
+            <div style={{ padding: '12px 24px', background: 'rgba(15,23,42,0.9)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Uploaded on {new Date(viewingDoc.uploaded_at).toLocaleString()}
+              </span>
+              <a href={viewingDoc.file_url} download={`${currentPatient?.name}_${viewingDoc.document_type}`} className="btn btn-primary" style={{ padding: '6px 16px', fontSize: '0.8rem', textDecoration: 'none' }}>
+                Download Original
+              </a>
+            </div>
           </div>
-
         </div>
-      </div>
+      )}
     </div>
   );
 }
