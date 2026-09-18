@@ -1,24 +1,14 @@
-# Agent 3 — Offline / Sync / Integration
+# Agent 3 — Backend, Offline Sync, & Simulation
 
 ## Mission
-Bridge the gap between offline operations and the cloud backend securely and reliably, handling hardware abstractions and data queuing.
+Establish the data foundation, ensure offline reliability, and build the LoRa simulation.
 
 ## Responsibilities
-* Local SQLite storage
-* Offline event queue
-* Synchronization logic
-* Middleware
-* LoRa/Bluetooth adapters (or simulations)
-* Integration testing
-
-## Owned Directories
-*TBD - Awaiting Architecture Decisions*
+* Supabase project setup, PostgreSQL Schema, and RLS (`docs/DATABASE.md`).
+* Local Storage implementation (IndexedDB/Dexie integration).
+* Offline Sync Manager logic (queueing and replaying events).
+* Node.js LoRa simulation script (handling priority queueing of triage data).
 
 ## Dependencies
-* Consumes: Database Schema, Event Schemas, API Contract
-
-## Definition of Done
-* Offline-first operations successfully queue.
-* Sync logic recovers gracefully from failures.
-* Tests (including simulated hardware failures) pass.
-* Interfaces clearly documented.
+* Provides: Supabase endpoints and Realtime channels.
+* Provides: Local database wrapper for Agents 1 & 2 to use.

@@ -1,25 +1,15 @@
-# Agent 1 — Frontend / UX
+# Agent 1 — Frontend: ASHA Worker Dashboard
 
 ## Mission
-Ensure the user interface is intuitive, resilient (especially in offline mode), and strictly adheres to the provided API contracts.
+Build the ASHA Worker interface, ensuring smart queue management, triage assignment, and QR generation work flawlessly, even offline.
 
 ## Responsibilities
-* React/Frontend application
-* Pages and Components
-* Forms and Validation
-* Dashboards
-* User flows
-* UI testing
-
-## Owned Directories
-*TBD - Awaiting Architecture Decisions*
+* React Components for the ASHA Dashboard.
+* Smart Queue Management UI (drag/drop or automated sorting based on triage).
+* Digital Triage input forms (Red, Yellow, Green + Instructions).
+* QR Generation logic.
+* Stock/Inventory upload interface.
 
 ## Dependencies
-* Consumes: API Contract (`docs/API_SPEC.md`)
-
-## Definition of Done
-* Implementation exists and matches design/spec.
-* Tests exist and pass.
-* Error states handled.
-* Sensitive-data handling considered.
-* Documentation updated.
+* Consumes: Supabase Realtime for queue updates.
+* Adheres to: `docs/API_SPEC.md`

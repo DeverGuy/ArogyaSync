@@ -3,47 +3,38 @@
 ## Phase 0 — Foundation
 * [x] Repository setup
 * [x] Documentation templates
-* [ ] Analyze Proposal & Ask Blocking Questions
-* [ ] Architecture decisions
-* [ ] Contracts (API, DB, Sync)
-* [ ] Database schema defined
-* [ ] Authentication model defined
-* [ ] Agent ownership defined
-* [ ] Development conventions
+* [x] Analyze Proposal & Ask Blocking Questions
+* [x] Architecture decisions (React, Supabase, IndexedDB)
+* [x] Contracts (API, DB, Sync) defined
+* [x] Agent ownership defined
 
 ## Phase 1 — Parallel Core Development
-*TBD - Awaiting Task Breakdown*
-*(All three developers work simultaneously)*
+*(Teammates work simultaneously, pushing frequently to share context)*
+
+**Agent 1 Tasks (ASHA Dashboard):**
+* [ ] Setup React project (Vite + PWA) - *Coordinate with Agent 2/3*
+* [ ] Build Smart Queue UI components
+* [ ] Build Triage assignment logic
+* [ ] Implement QR Code generation
+
+**Agent 2 Tasks (Doctor Dashboard):**
+* [ ] Build Doctor Dashboard layout (Sidebar + Main View)
+* [ ] Build Patient Info Header & Vitals display
+* [ ] Build Vitals update form
+* [ ] Implement Document viewing UI
+
+**Agent 3 Tasks (Backend & Sync):**
+* [ ] Initialize Supabase project & apply schema
+* [ ] Configure Row Level Security (RLS)
+* [ ] Setup Dexie.js (IndexedDB) for local offline storage
+* [ ] Build Node.js LoRa simulation endpoint
 
 ## Phase 2 — Integration
-*TBD*
-*(Connect: Frontend ↔ API ↔ Database ↔ Offline storage ↔ Sync ↔ Gateway)*
+* [ ] Connect React frontends to Dexie (Local DB)
+* [ ] Implement Supabase Realtime subscriptions in React
+* [ ] Test Offline -> Online sync mechanism
 
-## Phase 3 — Testing
-* [ ] Functional testing
-* [ ] Security testing
-* [ ] Offline testing
-* [ ] Synchronization testing
-* [ ] Failure testing
-
-## Phase 4 — Demo Hardening
-* [ ] Seed data
-* [ ] Demo accounts
-* [ ] Demo scenarios
-* [ ] Hardware/simulation setup
-* [ ] Error handling
-* [ ] Performance cleanup
-
-## Phase 5 — Presentation
-* [ ] Architecture diagram
-* [ ] Problem → solution story
-* [ ] Live demonstration
-* [ ] Failure/offline demonstration
-* [ ] Security explanation
-* [ ] Impact explanation
-
----
-
-## Task Backlog (Draft)
-*(Format: Task ID | Description | Owner | Priority | Dependencies | Parallelizable | Definition of Done)*
-*TBD - Will be populated after architecture is finalized*
+## Phase 3 — Testing & Hardening
+* [ ] Test queue reordering when ASHA changes triage to RED
+* [ ] Test LoRa simulation priority queueing
+* [ ] Security testing (RLS validation)

@@ -1,25 +1,15 @@
-# Agent 2 — Backend / Database
+# Agent 2 — Frontend: Doctor Dashboard & Realtime
 
 ## Mission
-Design a robust, secure, and performant backend to support the ArogyaSync ecosystem, emphasizing strict authorization and data integrity.
+Build the Doctor's consultation interface, ensuring real-time queue visibility and seamless access/updating of patient vitals and documents.
 
 ## Responsibilities
-* Supabase / PostgreSQL configuration
-* Database Schema (`docs/DATABASE.md`)
-* Row Level Security (RLS)
-* Authentication / Authorization logic
-* APIs
-* Backend testing
-
-## Owned Directories
-*TBD - Awaiting Architecture Decisions*
+* React Components for the Doctor Dashboard.
+* Next Patient Sidebar (Real-time updates).
+* Current Patient Main Screen (Header info, Vitals table).
+* Forms for updating current visit vitals (Height, Weight, Age, Vitals).
+* Documentation view (X-rays, Lab reports).
 
 ## Dependencies
-* Provides: API Contract (`docs/API_SPEC.md`)
-* Consumes: Data Model
-
-## Definition of Done
-* Implementation exists and matches specs.
-* Authorization/RLS correctly implemented and tested.
-* Unit and integration tests pass.
-* Contracts (API/Schema) updated and communicated if changed.
+* Consumes: Supabase Realtime for queue updates.
+* Adheres to: `docs/API_SPEC.md`
