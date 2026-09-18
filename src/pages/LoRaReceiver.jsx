@@ -2,15 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { Radio, Activity, Database, Server, Wifi } from 'lucide-react';
 
 export default function LoRaReceiver() {
-  const [radioPackets, setRadioPackets] = useState([]);
+  const [radioPackets, setRadioPackets] = useState(() => {
+    const saved = localStorage.getItem('lora_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('lora_logs', JSON.stringify(radioPackets));
+  }, [radioPackets]);
 
   useEffect(() => {
     const radioChannel = new BroadcastChannel('lora_radio');
     radioChannel.onmessage = (event) => {
-      setRadioPackets(prev => [{ ...event.data, _receivedAt: new Date().toISOString() }, ...prev]);
+      setRadioPackets(prev => {
+        // Prevent duplicate logs if multiple tabs are open and receiving
+        const isDuplicate = prev.some(p => p.id === event.data.id && p.ts === event.data.ts);
+        if (isDuplicate) return prev;
+        return [{ ...event.data, _receivedAt: new Date().toISOString() }, ...prev];
+      });
     };
     return () => radioChannel.close();
   }, []);
+
+  const handleClearLogs = () => {
+    setRadioPackets([]);
+    localStorage.removeItem('lora_logs');
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#020617', color: '#10b981', fontFamily: 'monospace', padding: '24px' }}>
@@ -23,7 +40,10 @@ export default function LoRaReceiver() {
             <div style={{ fontSize: '0.85rem', color: '#059669' }}>Frequency: 868.0 MHz (LoRaWAN)</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '16px' }}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
+          <button onClick={handleClearLogs} style={{ background: 'transparent', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', padding: '0 16px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 'bold' }}>
+            CLEAR LOGS
+          </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16,185,129,0.1)', padding: '8px 16px', borderRadius: '4px', border: '1px solid rgba(16,185,129,0.3)' }}>
             <Server size={16} /> <span>Status: ONLINE</span>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../lib/db';
 import {
@@ -31,9 +31,24 @@ export function LoRaSelector() {
   const [selectedVisitIds, setSelectedVisitIds] = useState([]);
   const [selectedInventoryIds, setSelectedInventoryIds] = useState([]);
   const [transmitting, setTransmitting]         = useState(false);
-  const [transmissionLog, setTransmissionLog]   = useState([]);
+  const [transmissionLog, setTransmissionLog]   = useState(() => {
+    const saved = localStorage.getItem('asha_lora_logs');
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      // Filter out logs older than 5 days (5 * 24 * 60 * 60 * 1000 = 432000000 ms)
+      const fiveDaysAgo = Date.now() - 432000000;
+      return parsed.filter(log => log.timestamp && log.timestamp > fiveDaysAgo);
+    } catch {
+      return [];
+    }
+  });
   const [backendStatus, setBackendStatus]       = useState('unknown'); 
   const [statusChecking, setStatusChecking]     = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('asha_lora_logs', JSON.stringify(transmissionLog));
+  }, [transmissionLog]);
 
   const handleToggleVisit = (visitId) => {
     setSelectedVisitIds((prev) =>
@@ -108,7 +123,7 @@ export function LoRaSelector() {
     }
 
     setTransmitting(true);
-    setTransmissionLog([]);
+    // REMOVED: setTransmissionLog([]) to preserve 5-day history
 
     const selectedVisits = redVisits.filter((v) => selectedVisitIds.includes(v.id));
     const selectedInvItems = inventory.filter((i) => selectedInventoryIds.includes(i.id));
@@ -122,7 +137,6 @@ export function LoRaSelector() {
     }
     setBackendStatus(backendReachable ? 'online' : 'offline');
 
-    const results = [];
     const allPackets = [
       ...selectedVisits.map(v => ({ packet: buildPatientPacket(v), title: patientMap[v.patient_id]?.name || 'Unknown', isRed: true })),
       ...selectedInvItems.map(i => ({ packet: buildInventoryPacket(i), title: i.item_name, isRed: false }))
@@ -138,6 +152,8 @@ export function LoRaSelector() {
       radioChannel.postMessage(item.packet);
       radioChannel.close();
 
+      let newLogItem = null;
+
       if (backendReachable) {
         try {
           const res = await fetch(`${LORA_API_URL}/api/lora/transmit`, {
@@ -150,44 +166,47 @@ export function LoRaSelector() {
           const data = await res.json();
           const elapsed = Date.now() - startTime;
 
-          results.push({
+          newLogItem = {
             id:          pId,
             title:       item.title,
             triage:      triageLabel,
             byteSize:    data.compressed_size ?? '—',
             time:        new Date().toLocaleTimeString(),
+            timestamp:   Date.now(),
             elapsed:     `${elapsed}ms`,
             status:      res.ok ? 'SUCCESS' : 'BACKEND_ERROR',
             channel:     data.channel ?? 'LoRa-868MHz',
             packetId:    data.packet_id ?? 'N/A',
             note:        data.message   ?? ''
-          });
+          };
         } catch (err) {
-          results.push({
+          newLogItem = {
             id: pId, title: item.title, triage: triageLabel, byteSize: '—',
-            time: new Date().toLocaleTimeString(), elapsed: '—',
+            time: new Date().toLocaleTimeString(), timestamp: Date.now(), elapsed: '—',
             status: 'REQUEST_FAILED', note: err.message
-          });
+          };
         }
       } else {
         await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
         const simPayload = JSON.stringify(item.packet);
         const byteSize = Math.min(new Blob([simPayload]).size, 256);
 
-        results.push({
+        newLogItem = {
           id:          pId,
           title:       item.title,
           triage:      triageLabel,
           byteSize:    `~${byteSize}`,
           time:        new Date().toLocaleTimeString(),
+          timestamp:   Date.now(),
           elapsed:     `${Math.round(600 + Math.random() * 400)}ms`,
           status:      'SIMULATED',
           channel:     'LoRa-868MHz (sim)',
           packetId:    `SIM-${pId.slice(0, 8)}`,
           note:        'Python backend unreachable — visual simulation only'
-        });
+        };
       }
-      setTransmissionLog([...results]);
+      
+      setTransmissionLog(prev => [...prev, newLogItem]);
     }
 
     setTransmitting(false);

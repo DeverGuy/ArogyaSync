@@ -18,12 +18,23 @@ export default function DoctorDashboard() {
   const [viewingDoc, setViewingDoc]           = useState(null);
   const [editedPatient, setEditedPatient]     = useState({});
   const [editedVitals, setEditedVitals]       = useState({});
-  const [radioPackets, setRadioPackets]       = useState([]); 
+  const [radioPackets, setRadioPackets]       = useState(() => {
+    const saved = localStorage.getItem('lora_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('lora_logs', JSON.stringify(radioPackets));
+  }, [radioPackets]);
 
   useEffect(() => {
     const radioChannel = new BroadcastChannel('lora_radio');
     radioChannel.onmessage = (event) => {
-      setRadioPackets(prev => [{ ...event.data, _receivedAt: new Date().toISOString() }, ...prev]);
+      setRadioPackets(prev => {
+        const isDuplicate = prev.some(p => p.id === event.data.id && p.ts === event.data.ts);
+        if (isDuplicate) return prev;
+        return [{ ...event.data, _receivedAt: new Date().toISOString() }, ...prev];
+      });
     };
     return () => radioChannel.close();
   }, []);
@@ -203,7 +214,7 @@ export default function DoctorDashboard() {
                   <h2 style={{ fontSize: '0.9rem', color: '#10b981', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Radio size={16} color="#10b981" /> Incoming LoRa Transmissions
                   </h2>
-                  <button onClick={() => setRadioPackets([])} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>
+                  <button onClick={() => { setRadioPackets([]); localStorage.removeItem('lora_logs'); }} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>
                     Clear Log
                   </button>
                 </div>
