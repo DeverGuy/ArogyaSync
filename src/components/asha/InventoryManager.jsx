@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, generateUUID } from '../../lib/db';
 import { enqueueOfflineAction } from '../../lib/syncManager';
-import { Package, AlertTriangle, Plus, Edit2, CheckCircle2 } from 'lucide-react';
+import { Package, AlertTriangle, Plus, Edit2, CheckCircle2, Trash2 } from 'lucide-react';
 
 export function InventoryManager() {
   const items = useLiveQuery(() => db.inventory.toArray(), []) || [];
@@ -15,6 +15,7 @@ export function InventoryManager() {
 
   const [editingItemId, setEditingItemId] = useState(null);
   const [editQty, setEditQty] = useState('');
+  const [editThreshold, setEditThreshold] = useState('');
 
   const handleSaveNewItem = async (e) => {
     e.preventDefault();
@@ -42,27 +43,41 @@ export function InventoryManager() {
     }
   };
 
-  const handleUpdateQuantity = async (id, currentQty) => {
+  const handleUpdateItem = async (id) => {
     try {
       const newQty = parseInt(editQty);
-      if (isNaN(newQty)) return;
+      const newThreshold = parseInt(editThreshold);
+      if (isNaN(newQty) || isNaN(newThreshold)) return;
 
       const now = new Date().toISOString();
       await db.inventory.update(id, {
         quantity: newQty,
+        min_threshold: newThreshold,
         last_updated: now
       });
 
       await enqueueOfflineAction('inventory', 'UPDATE', {
         id,
         quantity: newQty,
+        min_threshold: newThreshold,
         last_updated: now
       });
 
       setEditingItemId(null);
       setEditQty('');
+      setEditThreshold('');
     } catch (err) {
-      console.error('Error updating stock quantity:', err);
+      console.error('Error updating stock item:', err);
+    }
+  };
+
+  const handleDeleteItem = async (id) => {
+    if (!window.confirm('Are you sure you want to completely remove this item from the inventory?')) return;
+    try {
+      await db.inventory.delete(id);
+      await enqueueOfflineAction('inventory', 'DELETE', { id });
+    } catch (err) {
+      console.error('Error deleting inventory item:', err);
     }
   };
 
@@ -174,7 +189,17 @@ export function InventoryManager() {
                   </td>
 
                   <td style={{ padding: '14px 20px', color: 'var(--text-muted)' }}>
-                    {item.min_threshold} {item.unit}
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        className="input-field"
+                        value={editThreshold}
+                        onChange={(e) => setEditThreshold(e.target.value)}
+                        style={{ width: '80px', padding: '4px 8px' }}
+                      />
+                    ) : (
+                      <>{item.min_threshold} {item.unit}</>
+                    )}
                   </td>
 
                   <td style={{ padding: '14px 20px' }}>
@@ -193,7 +218,7 @@ export function InventoryManager() {
                     {isEditing ? (
                       <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                         <button
-                          onClick={() => handleUpdateQuantity(item.id, item.quantity)}
+                          onClick={() => handleUpdateItem(item.id)}
                           className="btn btn-primary"
                           style={{ padding: '4px 10px', fontSize: '0.75rem' }}
                         >
@@ -208,14 +233,23 @@ export function InventoryManager() {
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => { setEditingItemId(item.id); setEditQty(item.quantity); }}
-                        className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                      >
-                        <Edit2 size={13} />
-                        <span>Adjust</span>
-                      </button>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => { setEditingItemId(item.id); setEditQty(item.quantity); setEditThreshold(item.min_threshold); }}
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                        >
+                          <Edit2 size={13} />
+                          <span>Adjust</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     )}
                   </td>
 

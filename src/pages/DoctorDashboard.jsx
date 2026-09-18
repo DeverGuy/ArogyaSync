@@ -341,7 +341,7 @@ export default function DoctorDashboard() {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', gap: '12px' }}>
-                      {selectedVisit.status !== 'In Consultation' && (
+                      {selectedVisit.status === 'In Progress' && (
                         <button className="btn btn-primary" onClick={handleCompleteConsultation} disabled={isSaving} style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', padding: '12px 24px' }}>
                           <CheckCircle size={18} /> Mark Consultation Complete
                         </button>
