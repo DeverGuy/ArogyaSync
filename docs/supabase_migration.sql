@@ -5,6 +5,7 @@
 
 -- ── 0. Cleanup old schema to prevent type conflicts ────────────────────────────
 drop table if exists public.visits cascade;
+drop table if exists public.phcs cascade;
 drop table if exists public.doctors cascade;
 drop table if exists public.patients cascade;
 drop table if exists public.documents cascade;
@@ -16,6 +17,18 @@ drop table if exists public.profiles cascade;
 
 -- ── 1. Enable UUID extension ──────────────────────────────────────────────────
 create extension if not exists "uuid-ossp";
+
+
+-- ── 1.5. phcs ───────────────────────────────────────────────────────────────────
+-- Primary Health Centres
+create table if not exists public.phcs (
+  id         text primary key,
+  name       text not null,
+  latitude   numeric,
+  longitude  numeric,
+  is_active  boolean default true,
+  created_at timestamptz default now()
+);
 
 
 -- ── 2. profiles (extends Supabase auth.users) ─────────────────────────────────
@@ -144,12 +157,22 @@ create table if not exists public.inventory (
 -- ── 8. Row Level Security (RLS) ───────────────────────────────────────────────
 -- All tables require authentication. Role-based access enforced server-side.
 
+alter table public.phcs      enable row level security;
 alter table public.profiles  enable row level security;
 alter table public.patients  enable row level security;
 alter table public.doctors   enable row level security;
 alter table public.visits    enable row level security;
 alter table public.documents enable row level security;
 alter table public.inventory enable row level security;
+
+-- phcs: anyone can insert (needed for registration), all staff can read
+create policy "Allow insert on phcs"
+  on public.phcs for insert
+  with check (true);
+
+create policy "All staff read phcs"
+  on public.phcs for select
+  using (true);
 
 -- profiles: users can only read their own profile
 create policy "Users read own profile"

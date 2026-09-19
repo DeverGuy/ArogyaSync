@@ -24,26 +24,30 @@ export default function Login() {
     setLoading(true);
     setError(null);
     
-    // Construct synthetic email based on role and numbers
-    const cleanPhc = phcNo.trim();
-    const cleanDoc = doctorNo.trim();
+    const cleanPhc = phcNo.trim().toUpperCase();
+    const cleanDoc = doctorNo.trim().toUpperCase();
     
     localStorage.setItem('current_phc', cleanPhc);
     
     const email = role === 'asha' 
-      ? `asha-${cleanPhc}@arogyasync.com` 
-      : `doc-${cleanPhc}-${cleanDoc}@arogyasync.com`;
+      ? `asha-${cleanPhc.toLowerCase()}@arogyasync.com` 
+      : `doc-${cleanPhc.toLowerCase()}-${cleanDoc.toLowerCase()}@arogyasync.com`;
     
     const { user, profile, error: signInError } = await signIn(email, password);
     
     if (signInError) {
       setError(signInError);
+    } else if (!profile) {
+      setError("User profile not found or role is missing.");
+      await signIn('', ''); // trigger sign out essentially, or we can just signOut
     } else {
-      // Navigate based on profile role if available, fallback to selected role
-      if (profile?.role === 'doctor' || role === 'doctor') {
+      // Navigate strictly based on the profile's actual role
+      if (profile.role === 'doctor') {
         navigate('/doctor');
-      } else {
+      } else if (profile.role === 'asha') {
         navigate('/asha');
+      } else {
+        setError("Invalid user role detected.");
       }
     }
     setLoading(false);
@@ -93,13 +97,13 @@ export default function Login() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-[#787774] uppercase tracking-widest">
-                  PHC Number
+                  PHC ID
                 </label>
                 <input
                   type="text"
                   value={phcNo}
                   onChange={(e) => setPhcNo(e.target.value)}
-                  placeholder="e.g. 1042"
+                  placeholder="e.g. PHC-MYS-01"
                   required
                   className="minimal-input bg-[#FBFBFA]"
                 />

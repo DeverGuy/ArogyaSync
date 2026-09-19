@@ -120,11 +120,15 @@ export function DoctorDutyManager() {
 
     try {
       // Generate sequential doctor number
+      const currentPhc = localStorage.getItem('current_phc') || 'PHC-UNK-01';
+      const parts = currentPhc.split('-');
+      const cityCode = parts.length > 1 ? parts[1] : 'UNK';
+      
       const count = await db.doctors.count();
       // start at 101, so + 101
       const seqNo = count + 101; 
-      const doctorNo = `DOC-MUM-${seqNo}`;
-      const phcId = 'PHC-MUM-01'; // Defaulting to the expected PHC id for prototype
+      const doctorNo = `DOC-${cityCode}-${seqNo}`;
+      const phcId = currentPhc; 
 
       const now = new Date().toISOString();
       const newDoc = {
@@ -139,7 +143,7 @@ export function DoctorDutyManager() {
       await enqueueOfflineAction('doctors', 'INSERT', newDoc);
       
       // Queue Supabase Auth User Creation
-      const email = `doc-${phcId}-${doctorNo}@arogyasync.com`;
+      const email = `doc-${phcId.toLowerCase()}-${doctorNo.toLowerCase()}@arogyasync.com`;
       await enqueueOfflineAction('auth.users', 'CREATE_AUTH_USER', {
         email,
         password: password.trim(),

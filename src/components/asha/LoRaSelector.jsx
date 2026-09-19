@@ -145,9 +145,11 @@ export function LoRaSelector() {
         try {
           const res = await fetch(`${LORA_API_URL}/api/lora/transmit`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json'
+            },
             body: JSON.stringify(item.packet),
-            signal: AbortSignal.timeout(8000)
+            signal: AbortSignal.timeout(45000)
           });
 
           const data = await res.json();
@@ -232,6 +234,8 @@ export function LoRaSelector() {
           </div>
           <p className="text-sm text-[#787774] m-0">
             Select patient records and Medicine Inventory to compress and broadcast over 15km LoRa RF network.
+            <br />
+            <span className="text-xs italic">(Uses CSMA / Listen Before Talk to prevent network collisions)</span>
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -249,7 +253,13 @@ export function LoRaSelector() {
             ) : (
               <SignalHigh size={14} />
             )}
-            {backendStatus === 'online' ? 'Backend Online' : backendStatus === 'offline' ? 'Backend Offline' : 'Check Backend'}
+            {statusChecking 
+              ? 'Checking...' 
+              : backendStatus === 'online' 
+                ? 'Backend Online' 
+                : backendStatus === 'offline' 
+                  ? 'Backend Offline (Simulating)' 
+                  : 'Check Backend'}
           </button>
         </div>
       </motion.div>

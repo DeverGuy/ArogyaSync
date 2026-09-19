@@ -10,9 +10,9 @@ export default function RegisterPHC() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   
-  const [phcName, setPhcName] = useState('');
+  const [city, setCity] = useState('');
   const [phcNo, setPhcNo] = useState('');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('123456');
   const [secretKey, setSecretKey] = useState('');
 
   const handleRegister = async (e) => {
@@ -39,17 +39,51 @@ export default function RegisterPHC() {
         return;
       }
 
-      // 2. Register Account
-      const cleanPhc = phcNo.trim();
-      const email = `asha-${cleanPhc}@arogyasync.com`;
+      // 2. Fetch coordinates from Nominatim
+      let latitude = null;
+      let longitude = null;
+      try {
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`);
+        const geoData = await geoRes.json();
+        if (geoData && geoData.length > 0) {
+          latitude = parseFloat(geoData[0].lat);
+          longitude = parseFloat(geoData[0].lon);
+        }
+      } catch (err) {
+        console.warn('Could not fetch coordinates for city', err);
+      }
+
+      // 3. Register PHC in database
+      const cityPrefix = city.trim().substring(0, 3).toUpperCase();
+      const phcId = `PHC-${cityPrefix}-${phcNo.trim()}`;
+
+      const { error: phcInsertError } = await supabase
+        .from('phcs')
+        .insert([{
+          id: phcId,
+          name: city.trim(),
+          latitude,
+          longitude,
+          is_active: true
+        }]);
+
+      if (phcInsertError) {
+        setError(`Failed to create PHC record: ${phcInsertError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      // 4. Register Auth Account
+      const email = `asha-${phcId.toLowerCase()}@arogyasync.com`;
       
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             role: 'asha',
-            full_name: phcName || `PHC ${cleanPhc}`,
+            full_name: `PHC ${city.trim()}`,
+            phc_id: phcId,
             plain_password: password
           }
         }
@@ -119,13 +153,13 @@ export default function RegisterPHC() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-[#787774] uppercase tracking-widest">
-                  PHC Name / Location
+                  City
                 </label>
                 <input
                   type="text"
-                  value={phcName}
-                  onChange={(e) => setPhcName(e.target.value)}
-                  placeholder="e.g. Rural Health Post 1"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="e.g. Bangalore"
                   required
                   className="minimal-input bg-[#FBFBFA]"
                 />
@@ -153,12 +187,14 @@ export default function RegisterPHC() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="••••••"
+                  minLength={6}
+                  maxLength={6}
                   required
                   className="minimal-input bg-[#FBFBFA]"
                 />
                 <p className="text-[10px] text-[#787774]">
-                  This will be used to log in as an ASHA worker.
+                  Must be exactly 6 characters (default: 123456).
                 </p>
               </div>
 

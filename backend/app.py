@@ -31,6 +31,7 @@ import struct
 import hashlib
 import threading
 import logging
+import random
 from datetime import datetime, timezone
 from collections import deque
 from base64 import b64encode
@@ -59,6 +60,11 @@ LORA_BAUDRATE_BPS  = 5400      # Typical LoRa SF9/BW125
 _tx_queue  = deque()
 _queue_lock = threading.Lock()
 _tx_log    = []   # Transmission history (in-memory, session only)
+
+_channel_state = {
+    'busy_until': 0.0,
+    'current_tx_triage': None
+}
 
 # ── Flask App ──────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -132,28 +138,46 @@ def encrypt_aes256(plaintext: bytes) -> dict:
     }
 
 
-def simulate_lora_transmission(packet_bytes: bytes, triage: str) -> dict:
+def simulate_lora_transmission(packet_bytes: bytes, triage: str, sender_phc: str = 'Unknown') -> dict:
     """
-    Simulates the physical LoRa transmission:
-      - Red triage: immediate (0ms simulated delay)
-      - Yellow:     short delay (200ms)
-      - Green:      normal delay (500ms)
-      - Inventory:  lowest priority (800ms)
+    Simulates the physical LoRa transmission with advanced MAC protocols:
+      - CSMA/CA: Listen Before Talk with random backoff (2-5s) if channel busy.
+      - Emergency Override: Red triage bypasses all wait times.
     Returns transmission metadata.
     """
-    delays = {'Red': 0, 'Yellow': 0.2, 'Green': 0.5, 'Inventory': 0.8}
-    delay  = delays.get(triage, 0.5)
-    time.sleep(delay)
-
+    global _channel_state
+    
+    is_emergency = (triage == 'Red')
     byte_count = len(packet_bytes)
     tx_time_ms = round((byte_count * 8 / LORA_BAUDRATE_BPS) * 1000, 1)
+    tx_time_sec = tx_time_ms / 1000.0
+
+    retries = 0
+    wait_time_total = 0.0
+
+    while not is_emergency and time.time() < _channel_state['busy_until']:
+        # Channel is busy. Wait random 2-5 seconds
+        backoff = random.uniform(2.0, 5.0)
+        time.sleep(backoff)
+        wait_time_total += backoff
+        retries += 1
+
+    # Channel is clear or we are emergency overriding. Lock and transmit.
+    with _queue_lock:
+        _channel_state['busy_until'] = time.time() + tx_time_sec
+        _channel_state['current_tx_triage'] = triage
+
+    # Base transmission time
+    time.sleep(tx_time_sec)
 
     return {
         'transmitted_bytes': byte_count,
         'tx_time_ms':        tx_time_ms,
         'channel':           LORA_CHANNEL,
         'range_km':          LORA_RANGE_KM,
-        'priority_delay_ms': round(delay * 1000)
+        'priority_delay_ms': round(wait_time_total * 1000),
+        'mac_protocol':      'CSMA',
+        'mac_retries':       retries
     }
 
 
@@ -184,8 +208,9 @@ def transmit():
     triage       = data.get('triage', 'Green') if payload_type == 'patient' else 'Inventory'
     packet_id    = f"LORA-{uuid.uuid4().hex[:12].upper()}"
     record_id    = data.get('patient_id') or data.get('id', '?')
+    sender_phc   = data.get('sender_phc', 'PHC-Unknown')
     
-    logger.info(f"[TX] Received {triage} packet for record {record_id[:8]}")
+    logger.info(f"[TX] Received {triage} packet for record {record_id[:8]} via CSMA from {sender_phc}")
 
     try:
         # 1. Compress to micro-string
@@ -197,7 +222,7 @@ def transmit():
         encrypted = encrypt_aes256(compressed)
 
         # 3. Simulate LoRa physical transmission (priority-ordered delay)
-        tx_meta = simulate_lora_transmission(compressed, triage)
+        tx_meta = simulate_lora_transmission(compressed, triage, sender_phc)
 
         # 4. Log to in-memory session log
         log_entry = {
