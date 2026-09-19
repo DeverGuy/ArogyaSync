@@ -10,7 +10,7 @@ import { motion } from 'motion/react';
 const LORA_API_URL = import.meta.env.VITE_LORA_API_URL || 'http://localhost:5000';
 
 export function LoRaSelector() {
-  const redVisits = useLiveQuery(() => db.visits.where('status').equals('Waiting').and(v => v.triage_status === 'Red').toArray(), []) || [];
+  const allVisits = useLiveQuery(() => db.visits.toArray(), []) || [];
   const patients = useLiveQuery(() => db.patients.toArray(), []) || [];
   const inventory = useLiveQuery(() => db.inventory.toArray(), []) || [];
 
@@ -49,8 +49,8 @@ export function LoRaSelector() {
     );
   };
 
-  const handleSelectAllRed = () => {
-    setSelectedVisitIds(redVisits.map((v) => v.id));
+  const handleSelectAllPatients = () => {
+    setSelectedVisitIds(allVisits.map((v) => v.id));
   };
   
   const handleSelectAllInventory = () => {
@@ -74,6 +74,8 @@ export function LoRaSelector() {
     const v = visit.vitals || {};
     return {
       type:         'patient',
+      id:           visit.id,
+      sender_phc:   localStorage.getItem('current_phc') || 'unknown',
       patient_id:   visit.patient_id,
       visit_id:     visit.id,
       triage:       visit.triage_status,
@@ -95,6 +97,7 @@ export function LoRaSelector() {
     const loraQty = Math.floor(item.quantity * 0.75);
     return {
       type: 'inventory',
+      sender_phc: localStorage.getItem('current_phc') || 'unknown',
       id: item.id,
       name: item.item_name,
       qty: loraQty,
@@ -110,7 +113,7 @@ export function LoRaSelector() {
 
     setTransmitting(true);
 
-    const selectedVisits = redVisits.filter((v) => selectedVisitIds.includes(v.id));
+    const selectedVisits = allVisits.filter((v) => selectedVisitIds.includes(v.id));
     const selectedInvItems = inventory.filter((i) => selectedInventoryIds.includes(i.id));
 
     let backendReachable = false;
@@ -123,7 +126,7 @@ export function LoRaSelector() {
     setBackendStatus(backendReachable ? 'online' : 'offline');
 
     const allPackets = [
-      ...selectedVisits.map(v => ({ packet: buildPatientPacket(v), title: patientMap[v.patient_id]?.name || 'Unknown', isRed: true })),
+      ...selectedVisits.map(v => ({ packet: buildPatientPacket(v), title: patientMap[v.patient_id]?.name || 'Unknown', isRed: v.triage_status === 'Red' })),
       ...selectedInvItems.map(i => ({ packet: buildInventoryPacket(i), title: i.item_name, isRed: false }))
     ];
 
@@ -228,7 +231,7 @@ export function LoRaSelector() {
             </h2>
           </div>
           <p className="text-sm text-[#787774] m-0">
-            Select Red Alert patients and Medicine Inventory to compress and broadcast over 15km LoRa RF network.
+            Select patient records and Medicine Inventory to compress and broadcast over 15km LoRa RF network.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -253,31 +256,31 @@ export function LoRaSelector() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         
-        {/* ── Patient Selection (Red Only) ────────────────────────── */}
+        {/* ── Patient Selection (All Patients) ────────────────────────── */}
         <motion.div 
           {...animationProps} transition={{ ...animationProps.transition, delay: 0.1 }}
           className="bg-white border border-[#EAEAEA] p-6 rounded-xl"
         >
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm font-bold text-[#111111] uppercase tracking-wider m-0 flex items-center gap-2">
-              <ShieldAlert size={16} className="text-[#111111]" /> Red Alert Patients ({redVisits.length})
+              <ShieldAlert size={16} className="text-[#111111]" /> All Patients ({allVisits.length})
             </h3>
             <button 
-              onClick={handleSelectAllRed} 
+              onClick={handleSelectAllPatients} 
               className="text-xs px-3 py-1.5 bg-[#F9F9F8] border border-[#EAEAEA] text-[#111111] rounded-md cursor-pointer hover:bg-[#EAEAEA] transition-colors"
             >
               Select All
             </button>
           </div>
 
-          {redVisits.length === 0 ? (
+          {allVisits.length === 0 ? (
             <div className="p-8 text-center bg-[#F9F9F8] border border-[#EAEAEA] rounded-xl">
               <CheckCircle2 size={24} className="text-[#787774] mb-3 mx-auto" />
-              <p className="text-[#787774] text-sm m-0">No Red Alert patients currently waiting.</p>
+              <p className="text-[#787774] text-sm m-0">No patient records available.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2">
-              {redVisits.map((visit) => {
+              {allVisits.map((visit) => {
                 const patient = patientMap[visit.patient_id] || { name: 'Unknown' };
                 const isSelected = selectedVisitIds.includes(visit.id);
                 return (

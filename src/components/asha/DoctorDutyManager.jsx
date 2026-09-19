@@ -100,6 +100,7 @@ export function DoctorDutyManager() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newSpecialty, setNewSpecialty] = useState('General Physician');
+  const [password, setPassword] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleToggleDuty = async (doctor) => {
@@ -114,24 +115,43 @@ export function DoctorDutyManager() {
 
   const handleAddDoctor = async (e) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!newName.trim() || !password.trim()) return;
     setIsSaving(true);
 
     try {
+      // Generate sequential doctor number
+      const count = await db.doctors.count();
+      // start at 101, so + 101
+      const seqNo = count + 101; 
+      const doctorNo = `DOC-MUM-${seqNo}`;
+      const phcId = 'PHC-MUM-01'; // Defaulting to the expected PHC id for prototype
+
       const now = new Date().toISOString();
       const newDoc = {
         id: generateUUID(),
         full_name: newName.trim(),
         specialty: newSpecialty,
         is_on_duty: true,
-        phc_id: 'phc-001',
+        phc_id: phcId,
         created_at: now
       };
       await db.doctors.add(newDoc);
       await enqueueOfflineAction('doctors', 'INSERT', newDoc);
+      
+      // Queue Supabase Auth User Creation
+      const email = `doc-${phcId}-${doctorNo}@arogyasync.com`;
+      await enqueueOfflineAction('auth.users', 'CREATE_AUTH_USER', {
+        email,
+        password: password.trim(),
+        full_name: newDoc.full_name,
+        role: 'doctor'
+      });
+
       setNewName('');
       setNewSpecialty('General Physician');
+      setPassword('');
       setShowAddForm(false);
+      alert(`Doctor added successfully!\n\nDoctor Number: ${doctorNo}\nPassword: ${password}\n\nPlease share this with the doctor to login.`);
     } catch (err) {
       console.error('[DoctorDutyManager] Add doctor failed:', err);
     } finally {
@@ -215,6 +235,20 @@ export function DoctorDutyManager() {
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-2 block text-sm font-medium text-[#111111]">
+                      Password for Doctor *
+                    </label>
+                    <input
+                      type="password"
+                      className="w-full rounded-md border border-[#EAEAEA] bg-white px-3 py-2 text-sm text-[#111111] placeholder-[#787774] focus:border-[#111111] focus:outline-none focus:ring-1 focus:ring-[#111111]"
+                      placeholder="e.g. securepassword123"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <p className="mt-1 text-xs text-[#787774]">Doctor Number will be auto-generated upon saving.</p>
                   </div>
                 </div>
                 <div className="flex justify-end gap-4">

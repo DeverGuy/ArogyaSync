@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Users, QrCode, Radio, Package, Stethoscope, UserCog,
-  Wifi, WifiOff, RefreshCw, LogOut
+  Wifi, WifiOff, RefreshCw, LogOut, Cpu
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -10,7 +10,8 @@ const TABS = [
   { key: 'qr',        label: 'QR Codes',      icon: <QrCode size={16} /> },
   { key: 'inventory', label: 'Inventory',     icon: <Package size={16} /> },
   { key: 'lora',      label: 'LoRa TX',       icon: <Radio size={16} /> },
-  { key: 'duty',      label: 'Duty Roster',   icon: <UserCog size={16} /> }
+  { key: 'duty',      label: 'Duty Roster',   icon: <UserCog size={16} /> },
+  { key: 'gateway',   label: 'Gateway RX',    icon: <Cpu size={16} /> }
 ];
 
 export function Header({ activeTab, setActiveTab, isOnline, toggleOnline, onManualSync, onSignOut }) {

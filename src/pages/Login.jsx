@@ -28,6 +28,8 @@ export default function Login() {
     const cleanPhc = phcNo.trim();
     const cleanDoc = doctorNo.trim();
     
+    localStorage.setItem('current_phc', cleanPhc);
+    
     const email = role === 'asha' 
       ? `asha-${cleanPhc}@arogyasync.com` 
       : `doc-${cleanPhc}-${cleanDoc}@arogyasync.com`;

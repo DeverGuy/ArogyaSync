@@ -1,6 +1,112 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Radio, ShieldAlert, Cpu, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Radio, ShieldAlert, Cpu, CheckCircle2, RotateCcw, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+const PacketCard = ({ pkt }) => {
+  const [decompressed, setDecompressed] = useState(false);
+
+  useEffect(() => {
+    // Simulate decompression/decryption delay
+    const timer = setTimeout(() => setDecompressed(true), 1200 + Math.random() * 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="p-4 bg-[#FBFBFA] border border-[#EAEAEA] rounded-md"
+    >
+      <div className="flex justify-between items-start mb-3 border-b border-[#EAEAEA] pb-2 text-xs font-bold uppercase tracking-widest text-[#787774]">
+        <span>[RX] {new Date(pkt._receivedAt).toLocaleTimeString()}</span>
+        <div className="flex items-center gap-4">
+          <span className="text-[#111111]">RSSI: -{Math.floor(Math.random() * 20 + 80)}dBm</span>
+          <span className="text-[#111111]">SNR: {Math.floor(Math.random() * 5 + 5)}dB</span>
+        </div>
+      </div>
+      <div className="flex gap-4">
+        <div className="mt-1">
+          {(pkt.priority || pkt.triage) === 'Red' ? (
+            <ShieldAlert size={20} className="text-[#9F2F2D]" />
+          ) : (
+            <CheckCircle2 size={20} className="text-[#346538]" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          {!decompressed ? (
+            <div className="text-[#787774] font-mono text-xs flex flex-col gap-3 py-2">
+              <div className="flex items-center gap-2 text-[#956400] font-bold">
+                <RefreshCw size={14} className="animate-spin" />
+                <span>Decrypting & Decompressing LoRa payload...</span>
+              </div>
+              <div className="text-[10px] break-all opacity-40 bg-[#EAEAEA]/50 p-2 rounded">
+                {btoa(encodeURIComponent(JSON.stringify(pkt))).substring(0, 120)}...
+              </div>
+            </div>
+          ) : (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
+              <div className="flex justify-between items-center border-b border-[#EAEAEA] pb-3">
+                <span className="text-sm font-bold text-[#111111]">
+                  {pkt.type === 'patient' ? `Patient: ${pkt.name}` : `Inventory: ${pkt.name}`}
+                </span>
+                <span className="text-[10px] text-[#346538] font-bold bg-[#EDF3EC] px-2 py-1 rounded-sm uppercase tracking-wider">
+                  Decoded
+                </span>
+              </div>
+              
+              {pkt.type === 'patient' && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Blood</span>
+                    <span className="text-[#111111] font-medium">{pkt.blood}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Allergy</span>
+                    <span className="text-[#111111] font-medium">{pkt.allergy}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Priority</span>
+                    <span className={`font-bold ${pkt.triage === 'Red' ? 'text-[#9F2F2D]' : 'text-[#956400]'}`}>{pkt.triage}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Contact</span>
+                    <span className="text-[#111111] font-medium">{pkt.ePhone || 'N/A'}</span>
+                  </div>
+                  
+                  <div className="col-span-2 md:col-span-4 bg-white p-3 rounded border border-[#EAEAEA]">
+                    <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Chief Complaint & Notes</span>
+                    <span className="text-[#111111] font-medium block">{pkt.complaint}</span>
+                    {pkt.notes && <span className="text-[#787774] mt-1 block">{pkt.notes}</span>}
+                  </div>
+                  
+                  <div className="col-span-2 md:col-span-4 flex flex-wrap gap-x-6 gap-y-2 bg-white p-3 rounded border border-[#EAEAEA]">
+                    <div><span className="text-[10px] text-[#787774] uppercase font-bold mr-1">BP:</span> <span className="font-medium text-[#111111]">{pkt.bp}</span></div>
+                    <div><span className="text-[10px] text-[#787774] uppercase font-bold mr-1">SpO2:</span> <span className="font-medium text-[#111111]">{pkt.spo2}</span></div>
+                    <div><span className="text-[10px] text-[#787774] uppercase font-bold mr-1">HR:</span> <span className="font-medium text-[#111111]">{pkt.hr}</span></div>
+                    <div><span className="text-[10px] text-[#787774] uppercase font-bold mr-1">Temp:</span> <span className="font-medium text-[#111111]">{pkt.temp}</span></div>
+                  </div>
+                </div>
+              )}
+              
+              {pkt.type === 'inventory' && (
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Item ID</span>
+                    <span className="text-[#111111] font-mono font-medium">{pkt.id}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Tx Quantity</span>
+                    <span className="text-[#111111] font-bold text-base">{pkt.qty}</span>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 export default function LoRaReceiver() {
   const [packets, setPackets] = useState([]);
@@ -12,7 +118,7 @@ export default function LoRaReceiver() {
     if (isListening) {
       radioChannel = new BroadcastChannel('lora_radio');
       radioChannel.onmessage = (event) => {
-        if (event.data.type === 'inventory') return; // Filter out inventory from doctor's radio
+        if (event.data.type === 'AUTO_ADVANCE') return; // Filter out internal UI signals
         setPackets(prev => {
           const isDuplicate = prev.some(p => p.id === event.data.id && p.ts === event.data.ts);
           if (isDuplicate) return prev;
@@ -30,17 +136,16 @@ export default function LoRaReceiver() {
   }, [packets]);
 
   return (
-    <div className="min-h-[100dvh] bg-[#F7F6F3] text-[#111111] font-sans selection:bg-[#EAEAEA] flex flex-col">
-      <header className="w-full bg-white border-b border-[#EAEAEA] py-6 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shrink-0">
-        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 border border-[#EAEAEA] rounded-md flex items-center justify-center bg-[#FBFBFA]">
-              <Cpu size={20} className="text-[#111111]" />
+    <div className="flex flex-col h-[75vh] min-h-[600px] w-full">
+      <div className="flex-1 bg-white border border-[#EAEAEA] rounded-xl overflow-hidden flex flex-col shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
+        <div className="p-4 border-b border-[#EAEAEA] bg-[#FBFBFA] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex gap-2">
+              <div className="w-3 h-3 rounded-full bg-[#EAEAEA]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#EAEAEA]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#EAEAEA]"></div>
             </div>
-            <div>
-              <h1 className="font-serif text-2xl font-medium tracking-tight m-0 leading-none">LoRa Gateway</h1>
-              <p className="text-sm text-[#787774] mt-1 leading-none">868.0 MHz Receiver Terminal</p>
-            </div>
+            <span className="text-[#787774] font-mono text-xs ml-2">/dev/ttyUSB0</span>
           </div>
           <div className="flex items-center gap-3">
             <button 
@@ -56,26 +161,14 @@ export default function LoRaReceiver() {
             </button>
             <button 
               onClick={() => setPackets([])}
-              className="btn-minimal-outline text-xs px-3 py-1.5 rounded-full"
+              className="btn-minimal-outline text-xs px-3 py-1.5 rounded-full bg-white"
             >
               <RotateCcw size={14} /> Clear
             </button>
           </div>
         </div>
-      </header>
-
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-12 flex flex-col">
-        <div className="flex-1 bg-white border border-[#EAEAEA] rounded-xl overflow-hidden flex flex-col shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-          <div className="p-4 border-b border-[#EAEAEA] bg-[#FBFBFA] flex items-center gap-2">
-            <div className="flex gap-2">
-              <div className="w-3 h-3 rounded-full bg-[#EAEAEA]"></div>
-              <div className="w-3 h-3 rounded-full bg-[#EAEAEA]"></div>
-              <div className="w-3 h-3 rounded-full bg-[#EAEAEA]"></div>
-            </div>
-            <span className="text-[#787774] font-mono text-xs ml-2">/dev/ttyUSB0</span>
-          </div>
-          
-          <div className="flex-1 p-6 overflow-y-auto font-mono text-sm bg-white">
+        
+        <div className="flex-1 p-6 overflow-y-auto font-mono text-sm bg-[#F7F6F3]">
             {packets.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-[#787774]">
                 <Radio size={48} className="opacity-20 mb-4" />
@@ -85,80 +178,14 @@ export default function LoRaReceiver() {
               <div className="flex flex-col gap-4">
                 <AnimatePresence initial={false}>
                   {packets.map((pkt, idx) => (
-                    <motion.div 
-                      key={idx}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="p-4 bg-[#FBFBFA] border border-[#EAEAEA] rounded-md"
-                    >
-                      <div className="flex justify-between items-start mb-3 border-b border-[#EAEAEA] pb-2 text-xs font-bold uppercase tracking-widest text-[#787774]">
-                        <span>[RX] {new Date(pkt._receivedAt).toLocaleTimeString()}</span>
-                        <div className="flex items-center gap-4">
-                          <span className="text-[#111111]">RSSI: -{Math.floor(Math.random() * 20 + 80)}dBm</span>
-                          <span className="text-[#111111]">SNR: {Math.floor(Math.random() * 5 + 5)}dB</span>
-                        </div>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="mt-1">
-                          {(pkt.priority || pkt.triage) === 'Red' ? (
-                            <ShieldAlert size={20} className="text-[#9F2F2D]" />
-                          ) : (
-                            <CheckCircle2 size={20} className="text-[#346538]" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-[#111111] font-bold mb-2 break-all">
-                            RAW: {JSON.stringify(pkt)}
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-[#EAEAEA]">
-                            <div>
-                              <span className="block text-[10px] text-[#787774] uppercase tracking-widest">Type</span>
-                              <span className="text-[#111111]">{pkt.type}</span>
-                            </div>
-                            {pkt.type === 'patient' && (
-                              <>
-                                <div>
-                                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest">Patient ID</span>
-                                  <span className="text-[#111111]">{(pkt.patient_id || pkt.patientId || '').substring(0,8)}...</span>
-                                </div>
-                                <div>
-                                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest">Priority</span>
-                                  <span className={pkt.triage === 'Red' ? 'text-[#9F2F2D] font-bold' : 'text-[#346538] font-bold'}>
-                                    {pkt.triage || pkt.priority || 'Standard'}
-                                  </span>
-                                </div>
-                              </>
-                            )}
-                            {pkt.type === 'inventory' && (
-                              <>
-                                <div>
-                                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest">Item ID</span>
-                                  <span className="text-[#111111]">{(pkt.id || '').substring(0,8)}...</span>
-                                </div>
-                                <div>
-                                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest">Quantity</span>
-                                  <span className="text-[#111111] font-bold">
-                                    {pkt.qty}
-                                  </span>
-                                </div>
-                              </>
-                            )}
-                            <div>
-                              <span className="block text-[10px] text-[#787774] uppercase tracking-widest">ASHA ID</span>
-                              <span className="text-[#111111]">{pkt.sender || 'Local'}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
+                    <PacketCard key={pkt.ts + idx} pkt={pkt} />
                   ))}
                 </AnimatePresence>
                 <div ref={bottomRef} />
               </div>
             )}
           </div>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -35,6 +35,70 @@ export const generateUUID = () => {
 };
 
 export const seedInitialData = async () => {
+  if (window.__AROGYASYNC_SEEDED) return;
+  window.__AROGYASYNC_SEEDED = true;
+
+  const count = await db.patients.count();
+  if (count > 0) {
+    // Deduplicate logic in case HMR previously created clones
+    const allPatients = await db.patients.toArray();
+    const seenNames = new Set();
+    const duplicateIds = [];
+    for (const p of allPatients) {
+      if (seenNames.has(p.name)) {
+        duplicateIds.push(p.id);
+      } else {
+        seenNames.add(p.name);
+      }
+    }
+    if (duplicateIds.length > 0) {
+      console.log(`[ArogyaSync] Removing ${duplicateIds.length} cloned patients...`);
+      await db.patients.bulkDelete(duplicateIds);
+      
+      // Also clean up duplicate visits for those cloned patients
+      const allVisits = await db.visits.toArray();
+      const duplicateVisitIds = allVisits.filter(v => duplicateIds.includes(v.patient_id)).map(v => v.id);
+      if (duplicateVisitIds.length > 0) {
+        await db.visits.bulkDelete(duplicateVisitIds);
+      }
+    }
+
+    // Deduplicate Doctors
+    const allDoctors = await db.doctors.toArray();
+    const seenDocs = new Set();
+    const duplicateDocIds = [];
+    for (const d of allDoctors) {
+      if (seenDocs.has(d.full_name)) {
+        duplicateDocIds.push(d.id);
+      } else {
+        seenDocs.add(d.full_name);
+      }
+    }
+    if (duplicateDocIds.length > 0) {
+      console.log(`[ArogyaSync] Removing ${duplicateDocIds.length} cloned doctors...`);
+      await db.doctors.bulkDelete(duplicateDocIds);
+    }
+
+    // Deduplicate Inventory
+    const allInventory = await db.inventory.toArray();
+    const seenItems = new Set();
+    const duplicateItemIds = [];
+    for (const item of allInventory) {
+      if (seenItems.has(item.item_name)) {
+        duplicateItemIds.push(item.id);
+      } else {
+        seenItems.add(item.item_name);
+      }
+    }
+    if (duplicateItemIds.length > 0) {
+      console.log(`[ArogyaSync] Removing ${duplicateItemIds.length} cloned inventory items...`);
+      await db.inventory.bulkDelete(duplicateItemIds);
+    }
+    
+    console.log('[ArogyaSync] Database already seeded, skipping.');
+    return;
+  }
+
   console.log('[ArogyaSync] Force-clearing old data and seeding realistic data into IndexedDB...');
 
   await db.patients.clear();

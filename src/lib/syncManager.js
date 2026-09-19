@@ -1,5 +1,5 @@
 import { db } from './db';
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, createSecondaryClient } from './supabase';
 
 /**
  * Enqueue an offline action for later Supabase replay.
@@ -59,6 +59,22 @@ export const replaySyncQueue = async () => {
         }
         case 'DELETE': {
           const res = await supabase.from(item.table_name).delete().eq('id', payload.id);
+          error = res.error;
+          break;
+        }
+        case 'CREATE_AUTH_USER': {
+          const secondaryClient = createSecondaryClient();
+          const { email, password, full_name, role } = payload;
+          const res = await secondaryClient.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name,
+                role
+              }
+            }
+          });
           error = res.error;
           break;
         }

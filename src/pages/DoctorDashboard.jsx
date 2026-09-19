@@ -5,11 +5,103 @@ import { enqueueOfflineAction } from '../lib/syncManager';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   User, Activity, FileText, History, ChevronRight, CheckCircle, Save,
-  Stethoscope, Wifi, WifiOff, Users, X, BookOpen, ClipboardList, Radio
+  Stethoscope, Wifi, WifiOff, Users, X, BookOpen, ClipboardList, Radio,
+  RefreshCw, ShieldAlert, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const TRIAGE_PRIORITY = { Red: 1, Yellow: 2, Green: 3 };
+
+const PacketCard = ({ pkt }) => {
+  const [decompressed, setDecompressed] = useState(false);
+
+  useEffect(() => {
+    // Simulate decompression delay
+    const timer = setTimeout(() => setDecompressed(true), 1200 + Math.random() * 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="p-4 bg-white border border-[#EAEAEA] rounded-md shadow-[0_2px_12px_rgba(0,0,0,0.02)]"
+    >
+      <div className="flex justify-between items-start mb-3 border-b border-[#EAEAEA] pb-2 text-xs font-bold uppercase tracking-widest text-[#787774]">
+        <span>[RX] {new Date(pkt._receivedAt).toLocaleTimeString()}</span>
+        <div className="flex items-center gap-4">
+          <span className="text-[#111111]">RSSI: -{Math.floor(Math.random() * 20 + 80)}dBm</span>
+          <span className="text-[#111111]">SNR: {Math.floor(Math.random() * 5 + 5)}dB</span>
+        </div>
+      </div>
+      <div className="flex gap-4">
+        <div className="mt-1">
+          {(pkt.priority || pkt.triage) === 'Red' ? (
+            <ShieldAlert size={20} className="text-[#9F2F2D]" />
+          ) : (
+            <CheckCircle2 size={20} className="text-[#346538]" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          {!decompressed ? (
+            <div className="text-[#787774] font-mono text-xs flex flex-col gap-3 py-2">
+              <div className="flex items-center gap-2 text-[#956400] font-bold">
+                <RefreshCw size={14} className="animate-spin" />
+                <span>Decrypting & Decompressing LoRa payload...</span>
+              </div>
+              <div className="text-[10px] break-all opacity-40 bg-[#FBFBFA] p-2 rounded border border-[#EAEAEA]">
+                {btoa(encodeURIComponent(JSON.stringify(pkt))).substring(0, 120)}...
+              </div>
+            </div>
+          ) : (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
+              <div className="flex justify-between items-center border-b border-[#EAEAEA] pb-3">
+                <span className="text-sm font-bold text-[#111111]">
+                  Patient: {pkt.name}
+                </span>
+                <span className="text-[10px] text-[#346538] font-bold bg-[#EDF3EC] px-2 py-1 rounded-sm uppercase tracking-wider">
+                  Decoded
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                <div>
+                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Blood</span>
+                  <span className="text-[#111111] font-medium">{pkt.blood}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Allergy</span>
+                  <span className="text-[#111111] font-medium">{pkt.allergy}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Priority</span>
+                  <span className={`font-bold ${pkt.triage === 'Red' ? 'text-[#9F2F2D]' : 'text-[#956400]'}`}>{pkt.triage}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Contact</span>
+                  <span className="text-[#111111] font-medium">{pkt.ePhone || 'N/A'}</span>
+                </div>
+                
+                <div className="col-span-2 md:col-span-4 bg-[#FBFBFA] p-3 rounded border border-[#EAEAEA]">
+                  <span className="block text-[10px] text-[#787774] uppercase tracking-widest mb-1">Chief Complaint & Notes</span>
+                  <span className="text-[#111111] font-medium block">{pkt.complaint}</span>
+                  {pkt.notes && <span className="text-[#787774] mt-1 block">{pkt.notes}</span>}
+                </div>
+                
+                <div className="col-span-2 md:col-span-4 flex flex-wrap gap-x-6 gap-y-2 bg-[#FBFBFA] p-3 rounded border border-[#EAEAEA]">
+                  <div><span className="text-[10px] text-[#787774] uppercase font-bold mr-1">BP:</span> <span className="font-medium text-[#111111]">{pkt.bp}</span></div>
+                  <div><span className="text-[10px] text-[#787774] uppercase font-bold mr-1">SpO2:</span> <span className="font-medium text-[#111111]">{pkt.spo2}</span></div>
+                  <div><span className="text-[10px] text-[#787774] uppercase font-bold mr-1">HR:</span> <span className="font-medium text-[#111111]">{pkt.hr}</span></div>
+                  <div><span className="text-[10px] text-[#787774] uppercase font-bold mr-1">Temp:</span> <span className="font-medium text-[#111111]">{pkt.temp}</span></div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 export default function DoctorDashboard() {
   const [selectedVisitId, setSelectedVisitId] = useState(null);
@@ -31,7 +123,10 @@ export default function DoctorDashboard() {
   useEffect(() => {
     const radioChannel = new BroadcastChannel('lora_radio');
     radioChannel.onmessage = (event) => {
-      if (event.data.type === 'inventory') return; // Filter out inventory from doctor's radio
+      if (event.data.type !== 'patient') return; // Only receive patient packets
+      const currentPhc = localStorage.getItem('current_phc');
+      if (currentPhc && event.data.sender_phc === currentPhc) return; // Ignore transmissions from own PHC
+      
       setRadioPackets(prev => {
         const isDuplicate = prev.some(p => p.id === event.data.id && p.ts === event.data.ts);
         if (isDuplicate) return prev;
@@ -103,8 +198,15 @@ export default function DoctorDashboard() {
   }, [selectedVisitId, currentPatient?.id]);
 
   useEffect(() => {
-    if (!selectedVisitId && activeQueue.length > 0) {
-      setSelectedVisitId(activeQueue[0].id);
+    const current = activeQueue.find(v => v.id === selectedVisitId);
+    const busyVisit = activeQueue.find(v => ['In Consultation', 'In Progress'].includes(v.status));
+    
+    if (busyVisit && selectedVisitId !== busyVisit.id) {
+       // A patient is active/sent by ASHA, jump to them
+       setSelectedVisitId(busyVisit.id);
+    } else if (!current && !busyVisit && selectedVisitId) {
+       // If current is gone (deleted/completed) and no busy visit, clear selection
+       setSelectedVisitId(null);
     }
   }, [activeQueue, selectedVisitId]);
 
@@ -142,10 +244,28 @@ export default function DoctorDashboard() {
   const handleCompleteConsultation = async () => {
     if (!selectedVisit) return;
     const now = new Date().toISOString();
+    
+    // Complete current
     const update = { status: 'Completed', updated_at: now };
     await db.visits.update(selectedVisit.id, update);
     await enqueueOfflineAction('visits', 'UPDATE', { id: selectedVisit.id, ...update });
-    setSelectedVisitId(null);
+    
+    // Auto-advance: notify ASHA and let the doctor preview the next patient
+    const nextVisit = activeQueue.find(v => v.status === 'Waiting' && v.id !== selectedVisit.id);
+    if (nextVisit) {
+      const radioChannel = new BroadcastChannel('lora_radio');
+      radioChannel.postMessage({ 
+        type: 'AUTO_ADVANCE', 
+        patientId: nextVisit.patient_id,
+        id: window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(),
+        ts: now
+      });
+      radioChannel.close();
+      
+      setSelectedVisitId(nextVisit.id);
+    } else {
+      setSelectedVisitId(null);
+    }
   };
 
   const triageBadge = (level) => {
@@ -241,15 +361,7 @@ export default function DoctorDashboard() {
                       ) : (
                         <div className="flex flex-col gap-4">
                           {radioPackets.map((pkt, idx) => (
-                            <div key={idx} className="p-4 bg-white border border-[#EAEAEA] rounded-md shadow-sm">
-                              <div className="flex justify-between text-xs text-[#787774] font-bold mb-3 uppercase tracking-widest border-b border-[#EAEAEA] pb-2">
-                                <span>[RX] {new Date(pkt._receivedAt).toLocaleTimeString()}</span>
-                                <span>Signal: -84 dBm</span>
-                              </div>
-                              <pre className="text-[#111111] whitespace-pre-wrap break-all text-xs">
-                                {JSON.stringify(pkt, null, 2)}
-                              </pre>
-                            </div>
+                            <PacketCard key={pkt.ts + idx} pkt={pkt} />
                           ))}
                         </div>
                       )}

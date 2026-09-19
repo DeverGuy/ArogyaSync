@@ -6,6 +6,7 @@ import { QRGenerator } from '../components/asha/QRGenerator';
 import { InventoryManager } from '../components/asha/InventoryManager';
 import { LoRaSelector } from '../components/asha/LoRaSelector';
 import { DoctorDutyManager } from '../components/asha/DoctorDutyManager';
+import LoRaReceiver from './LoRaReceiver';
 import { seedInitialData } from '../lib/db';
 import { replaySyncQueue } from '../lib/syncManager';
 import { isSupabaseConfigured, supabase, signOut } from '../lib/supabase';
@@ -101,6 +102,7 @@ export default function AshaDashboard() {
               {activeTab === 'inventory' && <InventoryManager />}
               {activeTab === 'lora'      && <LoRaSelector />}
               {activeTab === 'duty'      && <DoctorDutyManager />}
+              {activeTab === 'gateway'   && <LoRaReceiver />}
             </motion.div>
           </AnimatePresence>
         </main>

@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder-arogyasync.supabase.co';
+let rawSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL || 'https://placeholder-arogyasync.supabase.co').trim();
+if (rawSupabaseUrl && !rawSupabaseUrl.startsWith('http')) {
+  rawSupabaseUrl = `https://${rawSupabaseUrl}`;
+}
+const supabaseUrl = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
 export const isSupabaseConfigured = Boolean(
@@ -13,6 +17,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true
   }
 });
+
+/**
+ * Secondary client for admin/signup tasks without overriding the current session.
+ */
+export const createSecondaryClient = () => {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
+};
 
 /**
  * Get the current authenticated user's profile (role, name, specialty).

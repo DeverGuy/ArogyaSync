@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { TriageForm } from './TriageForm';
 import { motion, AnimatePresence } from 'motion/react';
+import { useEffect } from 'react';
 
 // Triage sort priority: Red > Yellow > Green
 const TRIAGE_PRIORITY = { Red: 1, Yellow: 2, Green: 3 };
@@ -44,10 +45,10 @@ export function QueueManager({ onSelectQR }) {
   // Modal state for Patient Intake
   const [showIntakeModal, setShowIntakeModal] = useState(false);
 
-  // Live data from Dexie - ASHA sees Waiting and In Consultation patients
+  // Live data from Dexie - ASHA sees Waiting, In Consultation, and In Progress patients
   const visits = useLiveQuery(() => {
     if (!db.visits) return [];
-    return db.visits.toArray().then(arr => arr.filter(v => ['Waiting', 'In Consultation'].includes(v.status))).catch(() => []);
+    return db.visits.toArray().then(arr => arr.filter(v => ['Waiting', 'In Consultation', 'In Progress'].includes(v.status))).catch(() => []);
   }, []) || [];
   const patients = useLiveQuery(() => db.patients ? db.patients.toArray().catch(()=>[]) : [], []) || [];
   const doctors  = useLiveQuery(() => db.doctors ? db.doctors.toArray().catch(()=>[]) : [], []) || [];
@@ -61,6 +62,19 @@ export function QueueManager({ onSelectQR }) {
 
   const patientMap = patients.reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
   const doctorMap  = doctors.reduce((acc, d) => { acc[d.id] = d; return acc; }, {});
+
+  // Listen for Auto-Advance from Doctor Dashboard
+  useEffect(() => {
+    const radioChannel = new BroadcastChannel('lora_radio');
+    radioChannel.onmessage = (event) => {
+      if (event.data.type === 'AUTO_ADVANCE') {
+        const patientName = patientMap[event.data.patientId]?.name || 'the next patient';
+        // The user specifically requested a "LoRa trans incoming alert"
+        alert(`🔔 LoRa Trans Incoming Alert: The doctor has finished the previous consultation and automatically pulled ${patientName} into the room.`);
+      }
+    };
+    return () => radioChannel.close();
+  }, [patientMap]);
 
   // Sort: Red > Yellow > Green, then FIFO
   const sortedVisits = [...visits].sort((a, b) => {
@@ -371,8 +385,8 @@ export function QueueManager({ onSelectQR }) {
                       )}
                       
                       {visit.status === 'In Consultation' && (
-                        <div className="w-full text-xs px-3 py-2.5 bg-[#FBF3DB] text-[#956400] rounded-md text-center font-semibold">
-                          Sent to Doctor
+                        <div className="w-full text-xs px-3 py-2.5 bg-[#EDF3EC] text-[#346538] border border-[#346538]/30 rounded-md text-center font-bold">
+                          ✓ Request Sent
                         </div>
                       )}
                       
