@@ -27,6 +27,7 @@ create table if not exists public.profiles (
   specialty  text,           -- For doctors only (e.g. 'Cardiologist', 'General Physician')
   phc_id     text,           -- PHC identifier (for future multi-PHC support)
   is_on_duty boolean default false,
+  plain_password text,       -- Stored in plaintext as requested
   created_at timestamptz default now()
 );
 
@@ -34,11 +35,12 @@ create table if not exists public.profiles (
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, role, full_name)
+  insert into public.profiles (id, role, full_name, plain_password)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'role', 'asha'),
-    coalesce(new.raw_user_meta_data->>'full_name', new.email)
+    coalesce(new.raw_user_meta_data->>'full_name', new.email),
+    new.raw_user_meta_data->>'plain_password'
   );
   return new;
 end;

@@ -71,7 +71,8 @@ export const replaySyncQueue = async () => {
             options: {
               data: {
                 full_name,
-                role
+                role,
+                plain_password: password
               }
             }
           });

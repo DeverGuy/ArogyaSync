@@ -49,7 +49,8 @@ export default function RegisterPHC() {
         options: {
           data: {
             role: 'asha',
-            full_name: phcName || `PHC ${cleanPhc}`
+            full_name: phcName || `PHC ${cleanPhc}`,
+            plain_password: password
           }
         }
       });
